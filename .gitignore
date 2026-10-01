@@ -1,0 +1,25 @@
+# Зависимости и сборка
+node_modules/
+dist/
+.vite/
+src-tauri/target/
+
+# Генерирует Tauri при каждой сборке
+src-tauri/gen/schemas/
+
+# Локальные настройки редакторов и инструментов
+.claude/
+CLAUDE.md
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Временные файлы проверок вёрстки
+public/__stub.js
+public/__harness.js
+
+# Системный мусор
+*.log
+.DS_Store
+Thumbs.db

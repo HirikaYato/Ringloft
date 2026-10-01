@@ -1,0 +1,51 @@
+# Проверки на каждый пуш и пулл-реквест: то же, что перед релизом руками.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            libdbus-1-dev libasound2-dev libpipewire-0.3-dev libclang-dev cmake
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+      - run: npm run check
+
+      # Фронт нужен clippy: tauri::generate_context! встраивает собранный dist.
+      - run: npm run build
+
+      - name: clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Тесты заодно пересоздают TS-типы: если они разошлись с Rust, это видно
+      # по изменениям в src/bindings.
+      - name: Tests and generated types
+        working-directory: src-tauri
+        run: |
+          cargo test
+          git diff --exit-code ../src/bindings

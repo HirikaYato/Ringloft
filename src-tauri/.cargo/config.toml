@@ -1,0 +1,6 @@
+[env]
+# Куда ts-rs кладёт сгенерированные .ts (относительно src-tauri/).
+TS_RS_EXPORT_DIR = { value = "../src/bindings", relative = true }
+# u64/i64 в TS как number, а не bigint: через JSON они всё равно приходят числами,
+# а bigint ломает арифметику в сторах.
+TS_RS_LARGE_INT = "number"

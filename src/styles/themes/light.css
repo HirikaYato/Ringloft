@@ -1,0 +1,27 @@
+:root[data-theme='light'] {
+  /* Системные части полей (выпадающий список, полоса прокрутки) — в тон. */
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --bg-elev: #ffffff;
+  --bg-inset: #eceef1;
+  --row-alt: #f1f2f5;
+  --row-hover: #e6e9ef;
+  --row-sel: #d6e2fb;
+
+  --fg: #1b1d22;
+  --fg-dim: #5c626d;
+  --fg-faint: #6b717c;
+
+  --border: #d8dbe1;
+  --accent: #2f6fdd;
+  --accent-fg: #ffffff;
+  --danger: #c4342c;
+  --ok: #1f8b3a;
+
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--bg-elev));
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 8%);
+  --shadow-pop: 0 12px 28px rgb(16 24 40 / 16%), 0 2px 6px rgb(16 24 40 / 10%);
+  --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+  --scrim: rgb(16 24 40 / 35%);
+}

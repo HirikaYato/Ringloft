@@ -1,0 +1,161 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ringloft",
+  "version": "../package.json",
+  "identifier": "ringloft",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Ringloft",
+        "width": 1180,
+        "height": 720,
+        "minWidth": 680,
+        "minHeight": 420,
+        "resizable": true,
+        "decorations": false,
+        "dragDropEnabled": true,
+        "visible": true,
+        "theme": null
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPCACHE/covers/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage",
+      "nsis",
+      "msi"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Music",
+    "shortDescription": "Аудиоплеер для больших локальных коллекций",
+    "longDescription": "Быстрый десктопный аудиоплеер для больших локальных коллекций.",
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp3"
+        ],
+        "mimeType": "audio/mpeg",
+        "description": "Аудио MP3",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "flac"
+        ],
+        "mimeType": "audio/flac",
+        "description": "Аудио FLAC",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "ogg",
+          "oga"
+        ],
+        "mimeType": "audio/ogg",
+        "description": "Аудио Ogg",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "opus"
+        ],
+        "mimeType": "audio/x-opus+ogg",
+        "description": "Аудио Opus",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "m4a",
+          "m4b"
+        ],
+        "mimeType": "audio/mp4",
+        "description": "Аудио M4A",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "aac"
+        ],
+        "mimeType": "audio/aac",
+        "description": "Аудио AAC",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "wav",
+          "wave"
+        ],
+        "mimeType": "audio/x-wav",
+        "description": "Аудио WAV",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "aiff",
+          "aif"
+        ],
+        "mimeType": "audio/x-aiff",
+        "description": "Аудио AIFF",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "mka"
+        ],
+        "mimeType": "audio/x-matroska",
+        "description": "Аудио Matroska",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "m3u",
+          "m3u8"
+        ],
+        "mimeType": "audio/x-mpegurl",
+        "description": "Плейлист M3U",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "cue"
+        ],
+        "mimeType": "application/x-cue",
+        "description": "Разметка CUE",
+        "role": "Viewer"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "../packaging/ringloft.desktop.hbs"
+      },
+      "rpm": {
+        "desktopTemplate": "../packaging/ringloft.desktop.hbs"
+      }
+    }
+  }
+}

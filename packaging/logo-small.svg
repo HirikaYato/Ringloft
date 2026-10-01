@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Тот же знак, что в logo.svg, но упрощённый: два кольца вместо трёх и линии
+  плотнее. Нужен для 16-48 пикселей — там тонкие кольца исчезают в
+  сглаживании и вместо звука выходит серая клякса (сравнивалось на рендерах).
+  Купол оставлен: без него знак на мелком размере читается просто мишенью.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="haze" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFB454" stop-opacity="0.34" />
+      <stop offset="45%" stop-color="#D8862F" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#C8752A" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="core" cx="36%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#FFE9C4" />
+      <stop offset="42%" stop-color="#FFC271" />
+      <stop offset="100%" stop-color="#E08D26" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="232" fill="#090B10" />
+  <circle cx="512" cy="512" r="320" fill="url(#haze)" />
+
+  <path
+    d="M 92 512 A 420 420 0 0 1 932 512"
+    fill="none"
+    stroke="#3B4351"
+    stroke-width="46"
+    stroke-linecap="round"
+  />
+
+  <g fill="none" stroke="#E7A349" stroke-linecap="round">
+    <circle cx="512" cy="512" r="336" stroke-width="46" stroke-opacity="0.6" />
+    <circle cx="512" cy="512" r="216" stroke-width="52" />
+  </g>
+
+  <circle cx="512" cy="512" r="104" fill="url(#core)" />
+</svg>

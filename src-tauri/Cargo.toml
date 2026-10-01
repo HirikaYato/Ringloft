@@ -1,0 +1,89 @@
+[package]
+name = "ringloft"
+version = "0.1.0"
+description = "Аудиоплеер для больших локальных коллекций"
+authors = ["HirikaYato"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.89"
+default-run = "ringloft"
+
+[lib]
+name = "ringloft_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png", "protocol-asset"] }
+tauri-plugin-dialog = "2.7.3"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-window-state = "2.4.1"
+tauri-plugin-single-instance = "2.4.4"
+
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+ts-rs = "12.0.1"
+
+thiserror = "2.0.20"
+anyhow = "1.0.104"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2.5"
+
+parking_lot = "0.12.5"
+crossbeam-channel = "0.5.17"
+walkdir = "2.5.0"
+rayon = "1.12.0"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+notify = "8.2.0"
+
+# --- аудио (используется начиная с шага 2) ---
+symphonia = { version = "0.6.1", features = ["mp3", "aac", "alac", "isomp4"] }
+# Своего Opus у symphonia нет. Адаптер собирает libopus из исходников и
+# вшивает статически: системная библиотека не нужна ни на Linux, ни на Windows.
+symphonia-adapter-libopus = "0.3.0"
+# Отпечаток звука для AcoustID — порт chromaprint на чистом Rust.
+rusty-chromaprint = "0.3.0"
+rubato = "5.0.0"
+rtrb = "0.4.0"
+realfft = "3.5.0"
+lofty = "0.25.1"
+tauri-plugin-notification = "2.4.0"
+ureq = "3.4.2"
+md-5 = "0.11.0"
+trash = "5.2.9"
+
+# Фича pipewire на Windows не активирует ничего: сама зависимость pipewire
+# объявлена в cpal под cfg(linux/bsd). realtime поднимает приоритет аудиопотока.
+[dependencies.cpal]
+version = "0.18.2"
+features = ["pipewire", "realtime"]
+
+# Отладочная сборка с opt-level=0 не успевает декодировать в реальном времени,
+# поэтому зависимости жмём полностью, свой код — умеренно.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+# panic=unwind намеренно: паника в потоке декодера не должна убивать процесс.
+panic = "unwind"
+
+# Системный виджет проигрывателя: на Linux свой MPRIS на zbus (src/mpris),
+# на остальных платформах souvlaki ради SMTC и MediaPlayer.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5.19.0"
+# gtk нужен ради одной вещи: попросить композитор показать своё меню окна.
+# Версия обязана совпадать с той, что тянет tao, иначе это разные типы.
+gtk = "0.18"
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+souvlaki = "0.8.3"

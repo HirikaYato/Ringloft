@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Логотип Ringloft: расходящиеся круги вокруг тёплого центра — источник звука под
+  куполом.
+
+  Это крупный вариант, для 128 пикселей и выше. Для мелких размеров есть
+  logo-small.svg: тонкие кольца на 32 пикселях исчезают в сглаживании, и
+  вместо звука получается серая клякса. Оба файла собирает make-icons.sh.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="haze" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFB454" stop-opacity="0.42" />
+      <stop offset="42%" stop-color="#D8862F" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#C8752A" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="core" cx="36%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#FFE9C4" />
+      <stop offset="42%" stop-color="#FFC271" />
+      <stop offset="100%" stop-color="#E08D26" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="232" fill="#090B10" />
+  <circle cx="512" cy="512" r="330" fill="url(#haze)" />
+
+  <!-- Купол: прохладная дуга снаружи всех колец, ровно полукруг. Из-за неё
+       силуэт узнаётся с одного взгляда и не выглядит просто мишенью. -->
+  <path
+    d="M 104 512 A 408 408 0 0 1 920 512"
+    fill="none"
+    stroke="#3B4351"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+
+  <g fill="none" stroke="#E7A349" stroke-linecap="round">
+    <circle cx="512" cy="512" r="330" stroke-width="20" stroke-opacity="0.5" />
+    <circle cx="512" cy="512" r="240" stroke-width="22" stroke-opacity="0.72" />
+    <circle cx="512" cy="512" r="150" stroke-width="24" stroke-opacity="0.95" />
+  </g>
+
+  <circle cx="512" cy="512" r="72" fill="url(#core)" />
+</svg>

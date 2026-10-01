@@ -1,0 +1,29 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Минимум прав для главного окна: события, пути, своя рамка окна, диалог открытия файлов.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:path:default",
+    "core:window:default",
+    "core:webview:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "opener:allow-reveal-item-in-dir",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "notification:default",
+    "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
+    "core:window:allow-inner-size"
+  ]
+}

@@ -1,0 +1,84 @@
+# Релиз по тегу: `git tag v0.2.0 && git push origin v0.2.0` собирает пакеты
+# для Linux и Windows и складывает их в черновик релиза на GitHub. Черновик
+# публикуется руками — после того как его посмотрели.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 24.04: cpal собирает PipeWire из заголовков, а в 22.04 они слишком
+          # старые. Цена — пакеты требуют glibc 2.39 (Ubuntu 24.04, Debian 13,
+          # Fedora 40 и новее, Arch).
+          - os: ubuntu-24.04
+            bundles: deb,rpm,appimage
+          - os: windows-latest
+            bundles: nsis,msi
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            libdbus-1-dev libasound2-dev libpipewire-0.3-dev libclang-dev cmake file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Описание релиза — раздел этой версии из CHANGELOG.md.
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes=$(awk -v v="$version" '
+            $0 ~ "^## \\[?" v "\\]?" {found=1; next}
+            found && /^## / {exit}
+            found {print}
+          ' CHANGELOG.md)
+          [ -z "$notes" ] && notes="Изменения — в CHANGELOG.md."
+          {
+            echo "body<<NOTES_EOF"
+            echo "$notes"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # linuxdeploy для AppImage сам — AppImage, а FUSE на раннере нет.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          # Его встроенный strip старый и спотыкается о секцию .relr.dyn
+          # свежих библиотек.
+          NO_STRIP: true
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Ringloft ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          args: --bundles ${{ matrix.bundles }}

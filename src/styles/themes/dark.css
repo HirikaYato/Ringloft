@@ -1,0 +1,31 @@
+:root[data-theme='dark'] {
+  /* Системные части полей (выпадающий список, полоса прокрутки) — в тон. */
+  color-scheme: dark;
+
+  --bg: #17181c;
+  --bg-elev: #1e2026;
+  --bg-inset: #121316;
+  --row-alt: #1b1d22;
+  --row-hover: #24272e;
+  --row-sel: #2c3140;
+
+  --fg: #e6e8ec;
+  --fg-dim: #9aa0ab;
+  /* Бледный — для подписей и счётчиков, но читаемый: прежний #666c77 давал
+     контраст 3:1, а мелкому тексту нужно 4.5. */
+  --fg-faint: #858b96;
+
+  --border: #2a2d35;
+  --accent: #4f8cff;
+  --accent-fg: #ffffff;
+  --danger: #e5534b;
+  --ok: #3fb950;
+
+  /* Мягкая заливка акцентом — для «включённых» кнопок, где сплошной акцент
+     кричит слишком громко. */
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg-elev));
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 48%), 0 2px 6px rgb(0 0 0 / 32%);
+  --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  --scrim: rgb(0 0 0 / 55%);
+}

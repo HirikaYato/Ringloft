@@ -1,0 +1,263 @@
+/* Единая палитра. Темы переопределяют только значения переменных. */
+:root {
+  --font-ui: system-ui, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  --font-lyrics: 'Manrope Variable', var(--font-ui);
+
+  /* Шкала поднята на ступень: при 13 px основного и 11 px мелкого текст на
+     обычном расстоянии от монитора читался с трудом. */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+
+  /* Размеры и высоты строк — значения по умолчанию. Из настроек их
+     переписывает `lib/typography.svelte.ts`, от него же берёт высоту строки
+     виртуализация. */
+  --row-h: 30px;
+  --row-h-compact: 28px;
+  /* Колонки номера и времени растут вместе со шрифтом: в пикселях
+     заголовок «Время» на крупном шрифте обрезался до «Вр…». */
+  --col-num: calc(var(--fs-md) * 3.4);
+  --col-time: calc(var(--fs-md) * 4.4);
+  --radius: 6px;
+  --radius-lg: 10px;
+  --gap: 8px;
+  /* Высота единственной полосы сверху: она же заголовок окна, она же
+     панель инструментов. */
+  --chrome-h: 44px;
+
+  --dur-fast: 90ms;
+  --dur-mid: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  color: var(--fg);
+  background: var(--bg);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Высота от родителя, а не `100vh`: в WebKitGTK единица `vh` обновляется с
+   задержкой, и при растягивании окна нижняя панель уезжала за край. */
+#app {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Полосы прокрутки по умолчанию в WebKitGTK слишком толстые и светлые —
+   в тёмной теме они бросаются в глаза сильнее содержимого. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/*
+ * Кнопки и поля повторялись почти в каждом компоненте: Svelte изолирует
+ * стили, и одинаковые по смыслу правила начали расходиться между окнами.
+ * База лежит здесь, компоненты дописывают только своё.
+ *
+ * `.ghost` — обычная кнопка, `.chip` — она же круглая, `.primary` — главное
+ * действие, `.input` — однострочное поле, список или textarea.
+ */
+.ghost,
+.chip,
+.primary {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.ghost,
+.chip {
+  color: var(--fg-dim);
+  background: var(--bg-inset);
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 4px 14px;
+}
+
+.ghost:hover:not(:disabled),
+.chip:hover:not(:disabled) {
+  background: var(--row-hover);
+  color: var(--fg);
+}
+
+.ghost.active,
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.ghost:disabled,
+.chip:disabled,
+.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ghost:focus-visible,
+.chip:focus-visible,
+.primary:focus-visible,
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.input {
+  font: inherit;
+  width: 100%;
+  /* Ширина 100% должна включать отступы и рамку. У текстовых полей по
+     умолчанию content-box, и они вылезали за колонку на 18 пикселей — окно
+     настроек от этого прокручивалось вбок. У select браузер и так ставит
+     border-box, поэтому разница была видна только у полей ввода. */
+  box-sizing: border-box;
+  color: var(--fg);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+/* WebKitGTK рисует select средствами GTK-темы и наш фон игнорирует: в
+   тёмной теме выходило белое поле со светлым текстом. Поэтому рисуем сами,
+   стрелку — двумя градиентами (в них работают переменные темы, а в
+   картинке data: — нет). */
+select.input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--fg-dim) 50%),
+    linear-gradient(135deg, var(--fg-dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 55%,
+    calc(100% - 11px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+select.input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+select.input option,
+select.input optgroup {
+  color: var(--fg);
+  background: var(--bg-elev);
+}
+
+.input::placeholder {
+  color: var(--fg-faint);
+}
+
+/* Раздел настроек. Разделов теперь несколько, и часть их — отдельные
+   компоненты (Last.fm, Discord): scoped-стили туда не достают, а держать
+   одинаковую раскладку в каждом файле значит дать ей разъехаться. */
+.settings-block + .settings-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-block h2 {
+  margin: 12px 0 10px;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  font-weight: 600;
+}
+
+/* Подпись слева, управление справа: так настройки читаются столбиком,
+   а не расползаются по ширине окна. */
+.settings-block .field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.settings-block .label {
+  padding-top: 5px;
+  color: var(--fg);
+}
+
+.settings-block .control {
+  min-width: 0;
+}
+
+.settings-block .row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settings-block .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.settings-block .check input {
+  width: auto;
+  margin: 0;
+}
+
+.settings-block .hint {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+
+/* Системные ползунки и галочки красим один раз на всё приложение. */
+input[type='checkbox'],
+input[type='range'] {
+  accent-color: var(--accent);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
