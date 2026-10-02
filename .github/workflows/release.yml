@@ -22,11 +22,14 @@ jobs:
           # Fedora 40 и новее, Arch).
           - os: ubuntu-24.04
             bundles: deb,rpm,appimage
+          # MSI собирается на русском (кодовая страница 1251): в описаниях
+          # кириллица, а английский MSI с 1252 на ней падает. NSIS берёт
+          # язык системы — русский или английский.
           - os: windows-latest
-            bundles: nsis,msi
+            bundles: nsis,msi --verbose
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: System libraries (Linux)
         if: runner.os == 'Linux'
@@ -36,7 +39,7 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
             libdbus-1-dev libasound2-dev libpipewire-0.3-dev libclang-dev cmake file
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

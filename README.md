@@ -58,7 +58,7 @@ Get the latest version from the [Releases page](../../releases/latest):
 
 | System | File | How to install |
 | --- | --- | --- |
-| Windows 10/11 | `ringloft_…_x64-setup.exe` (or the `.msi`) | run the installer |
+| Windows 10/11 | `ringloft_…_x64-setup.exe` (or the `.msi`, Russian-language installer) | run the installer |
 | Ubuntu, Debian, Mint | `ringloft_…_amd64.deb` | `sudo apt install ./ringloft_*_amd64.deb` |
 | Fedora, openSUSE | `ringloft-…x86_64.rpm` | `sudo dnf install ./ringloft-*.x86_64.rpm` |
 | Any other Linux | `ringloft_…_amd64.AppImage` | `chmod +x ringloft_*.AppImage`, then run it |
