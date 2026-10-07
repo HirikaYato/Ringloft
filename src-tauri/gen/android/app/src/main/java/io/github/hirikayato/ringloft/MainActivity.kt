@@ -3,8 +3,20 @@ package io.github.hirikayato.ringloft
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 
 class MainActivity : TauriActivity() {
+  // Системную кнопку «назад» отдаём вебвью: интерфейс кладёт в его историю
+  // запись на каждый открытый экран или лист (src/lib/back.ts), и «назад»
+  // закрывает верхний. Когда история пуста, срабатывает обычное «назад».
+  override val handleBackNavigation: Boolean = true
+
+  /** Тёмные значки строки состояния — для светлой темы плеера, светлые — для тёмной. */
+  fun setLightBars(light: Boolean) {
+    val bars = WindowCompat.getInsetsController(window, window.decorView)
+    bars.isAppearanceLightStatusBars = light
+    bars.isAppearanceLightNavigationBars = light
+  }
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     // До super.onCreate: он запускает Rust-часть, а движку звука контекст нужен сразу.

@@ -110,6 +110,28 @@ pub async fn library_albums(
     blocking(move || library.albums(artist.as_deref())).await
 }
 
+/// Альбомы, пополнявшиеся последними, — для главного экрана библиотеки.
+#[tauri::command]
+pub async fn library_recent_albums(
+    state: State<'_, AppState>,
+    limit: u32,
+) -> Result<Vec<AlbumRow>> {
+    let library = state.library.clone();
+    blocking(move || library.recent_albums(limit)).await
+}
+
+/// Миниатюры обложек для строк списка, по одной на путь. Первый показ
+/// вынимает картинку из тега и сжимает её, поэтому не в UI-потоке.
+#[tauri::command]
+pub async fn covers_for_tracks(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<Option<String>>> {
+    let library = state.library.clone();
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    blocking(move || Ok(library.track_thumbnails(&paths))).await
+}
+
 /// Треки выбранного узла дерева. `scope` — album | artist | genre | folder.
 #[tauri::command]
 pub async fn library_tracks(

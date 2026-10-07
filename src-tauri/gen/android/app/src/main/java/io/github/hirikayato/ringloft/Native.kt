@@ -84,4 +84,10 @@ object Native {
   }
 
   @JvmStatic fun storageRoots(): Array<String> = Permissions.storageRoots(appContext)
+
+  /** Цвет значков системных панелей под тему плеера; без окна красить нечего. */
+  @JvmStatic
+  fun setLightBars(light: Boolean) {
+    main.post { Permissions.current?.setLightBars(light) }
+  }
 }

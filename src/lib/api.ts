@@ -171,6 +171,8 @@ export const api = {
   permissionsStatus: () => call<Permissions>('permissions_status'),
   /** Только телефон: на десктопе такой команды нет. Ответ пользователя не возвращается. */
   permissionsRequest: (kind: PermissionKind) => call<null>('permissions_request', { kind }),
+  /** Только телефон: цвет значков строки состояния под тему плеера. */
+  systemBars: (light: boolean) => call<null>('system_bars', { light }),
   storageRoots: () => call<FolderEntry[]>('storage_roots'),
   storageList: (path: string, extensions: string[]) =>
     call<FolderListing>('storage_list', { path, extensions }),
@@ -247,6 +249,9 @@ export const api = {
   playlistActivateTab: (id: number) => call<null>('playlist_activate_tab', { id }),
 
   playlistEnqueue: (ids: number[]) => call<null>('playlist_enqueue', { ids }),
+  /** Играет набор файлов временной очередью с `start`-го; открытый список не меняется. */
+  playlistPlayFiles: (paths: string[], start: number) =>
+    call<boolean>('playlist_play_files', { paths, start }),
   playlistQueueRows: () => call<PlaylistRow[]>('playlist_queue_rows'),
   playlistQueueClear: () => call<null>('playlist_queue_clear'),
 
@@ -271,6 +276,9 @@ export const api = {
   libraryGenres: () => call<NamedCount[]>('library_genres'),
   libraryFolders: () => call<NamedCount[]>('library_folders'),
   libraryAlbums: (artist?: string) => call<AlbumRow[]>('library_albums', { artist }),
+  libraryRecentAlbums: (limit: number) => call<AlbumRow[]>('library_recent_albums', { limit }),
+  /** Пути к миниатюрам обложек, по одному на трек; `null` — обложки нет. */
+  coversForTracks: (paths: string[]) => call<(string | null)[]>('covers_for_tracks', { paths }),
   libraryTracks: (scope: BrowseScope, value: string) =>
     call<LibraryTrack[]>('library_tracks', { scope, value }),
   libraryAlbumCover: (albumKey: string) =>

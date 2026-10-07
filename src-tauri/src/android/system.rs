@@ -36,6 +36,16 @@ pub fn request_permission(kind: PermissionKind) {
     });
 }
 
+/// Значки системных панелей: тёмные на светлой теме плеера, светлые на
+/// тёмной. Окно идёт под панели, и система сама его тему не знает.
+pub fn set_light_bars(light: bool) {
+    with_native("setLightBars", |env, native| {
+        let args = [jni::objects::JValue::Bool(u8::from(light))];
+        env.call_static_method(native, "setLightBars", "(Z)V", &args)?;
+        Ok(())
+    });
+}
+
 /// Память телефона и карты памяти. Первой идёт встроенная память.
 pub fn storage_roots() -> Vec<FolderEntry> {
     let paths = with_native("storageRoots", |env, native| {

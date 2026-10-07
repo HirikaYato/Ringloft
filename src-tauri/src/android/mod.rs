@@ -15,7 +15,9 @@ use jni::{JNIEnv, JavaVM};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 pub use media::spawn as spawn_media;
-pub use system::{files_allowed, notifications_allowed, request_permission, storage_roots};
+pub use system::{
+    files_allowed, notifications_allowed, request_permission, set_light_bars, storage_roots,
+};
 
 /// Главное окно — то же, что в `tauri.conf.json`.
 const MAIN_WINDOW: &str = "main";

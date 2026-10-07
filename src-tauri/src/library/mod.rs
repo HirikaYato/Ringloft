@@ -144,6 +144,31 @@ impl LibraryStore {
         self.db.with_read(|connection| browse::albums(connection, artist))
     }
 
+    pub fn recent_albums(&self, limit: u32) -> Result<Vec<AlbumRow>> {
+        self.db
+            .with_read(|connection| browse::recent_albums(connection, limit))
+    }
+
+    /// Миниатюры для строк списка — по одной на каждый путь, в том же
+    /// порядке. Трек из библиотеки берёт обложку своего альбома: она одна на
+    /// весь альбом, и кэш не растёт на каждую строку. У остальных своя.
+    pub fn track_thumbnails(&self, paths: &[PathBuf]) -> Vec<Option<String>> {
+        paths
+            .iter()
+            .map(|path| {
+                if crate::audio::is_stream(path) {
+                    return None;
+                }
+                let key = self.album_key_of(&path.to_string_lossy()).ok().flatten();
+                let thumbnail = match key {
+                    Some(key) => self.covers.ensure(&self.db, &key).ok().flatten(),
+                    None => self.covers.ensure_for_track(path),
+                };
+                thumbnail.map(|thumbnail| thumbnail.to_string_lossy().into_owned())
+            })
+            .collect()
+    }
+
     pub fn tracks_of(&self, filter: &TrackFilter) -> Result<Vec<LibraryTrack>> {
         self.db
             .with_read(|connection| browse::tracks_of(connection, filter))

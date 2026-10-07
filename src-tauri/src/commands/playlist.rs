@@ -219,6 +219,32 @@ pub fn playlist_play_index(state: State<'_, AppState>, index: u32) -> Result<()>
     state.controls().play_index(index as usize)
 }
 
+/// Играет набор файлов временной очередью, начиная с `start`-го: альбом
+/// или выборка из библиотеки. Открытый плейлист не меняется.
+#[tauri::command]
+pub async fn playlist_play_files(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+    start: u32,
+) -> Result<bool> {
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    let (engine, playlist, settings) = (
+        state.engine.clone(),
+        state.playlist.clone(),
+        state.settings.clone(),
+    );
+    // Развернуть пути — это обращения к диску, а их могут быть тысячи.
+    super::blocking(move || {
+        crate::playback::Controls {
+            engine: &engine,
+            playlist: &playlist,
+            settings: &settings,
+        }
+        .play_files(&paths, start as usize)
+    })
+    .await
+}
+
 #[tauri::command]
 pub fn player_next(state: State<'_, AppState>) -> Result<()> {
     state.controls().next(true)

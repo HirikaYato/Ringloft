@@ -63,6 +63,16 @@ pub fn permissions_request(kind: PermissionKind) {
     let _ = kind;
 }
 
+/// Красит значки строки состояния под тему плеера (см. `set_light_bars`).
+#[cfg(mobile)]
+#[tauri::command]
+pub fn system_bars(light: bool) {
+    #[cfg(target_os = "android")]
+    crate::android::set_light_bars(light);
+    #[cfg(not(target_os = "android"))]
+    let _ = light;
+}
+
 /// С чего начинать выбор папки: память телефона и карты памяти, а на
 /// десктопе — домашняя папка.
 #[tauri::command]

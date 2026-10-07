@@ -310,6 +310,12 @@ impl PlaylistStore {
     /// Файлы, открытые снаружи (проводник, вторая копия, MPRIS): своя
     /// вкладка вместо активной. Возвращает первую строку — её и играть.
     pub fn open_external(&self, paths: &[PathBuf]) -> Option<u64> {
+        self.open_external_at(paths, 0)
+    }
+
+    /// То же, но играть предлагает не первую строку, а `start`-ю: так
+    /// включают альбом с выбранного трека. Мимо списка — с первой.
+    pub fn open_external_at(&self, paths: &[PathBuf], start: usize) -> Option<u64> {
         let files = expand_paths(paths);
         if files.is_empty() {
             return None;
@@ -323,12 +329,12 @@ impl PlaylistStore {
             ids
         };
 
-        let first = ids.first().copied();
+        let chosen = ids.get(start).or(ids.first()).copied();
         for id in ids {
             let _ = self.meta_tx.send(id);
         }
         self.changed();
-        first
+        chosen
     }
 
     pub fn remove(&self, ids: &[u64]) {

@@ -1,7 +1,6 @@
 package io.github.hirikayato.ringloft
 
 import android.Manifest
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -23,13 +22,17 @@ object Permissions {
   private const val REQUEST_NOTIFICATIONS = 2
   private const val ASKED_NOTIFICATIONS = "asked-notifications"
 
-  private var activity: WeakReference<Activity>? = null
+  private var activity: WeakReference<MainActivity>? = null
 
-  fun attach(activity: Activity) {
+  /** Окно, которое сейчас на экране; `null` — приложение играет без окна. */
+  val current: MainActivity?
+    get() = activity?.get()
+
+  fun attach(activity: MainActivity) {
     this.activity = WeakReference(activity)
   }
 
-  fun detach(activity: Activity) {
+  fun detach(activity: MainActivity) {
     if (this.activity?.get() === activity) this.activity = null
   }
 
