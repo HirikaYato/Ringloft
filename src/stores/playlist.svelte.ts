@@ -402,7 +402,9 @@ export function describeRefresh(report: SourcesRefresh): string {
   if (report.removed > 0) parts.push(`убрано ${report.removed}`);
   let text = parts.length > 0 ? `Обновлено по папкам: ${parts.join(', ')}` : 'По папкам ничего нового';
   if (report.unreachable.length > 0) {
-    text += `. Недоступно: ${report.unreachable.join(', ')}`;
+    // Пустая папка от недоступной неотличима (так Android показывает любую
+    // папку без доступа к файлам), и строки таких папок список не теряет.
+    text += `. Недоступно или пусто: ${report.unreachable.join(', ')}`;
   }
   return text;
 }
