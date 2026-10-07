@@ -128,6 +128,7 @@ pub fn open(
     let config = supported.config();
 
     let shared: Arc<RingShared> = Arc::clone(consumer.shared());
+    let glitches = Arc::clone(&shared);
     let mut gain = shared.volume();
 
     let stream = device
@@ -163,16 +164,20 @@ pub fn open(
 
                 consumer.advance_frames(taken / channels);
             },
-            move |err| {
-                // Отказ в приоритете реального времени — не поломка: звук
-                // при нём идёт дальше, а движок на любое сообщение отсюда
-                // закрывает вывод. Приходит это из самого аудиоколлбэка,
-                // поэтому и в лог здесь писать нельзя.
-                if err.kind() == cpal::ErrorKind::RealtimeDenied {
-                    return;
-                }
+            move |err| match err.kind() {
+                // Сюда cpal присылает не только поломки, а движок на любое
+                // сообщение отсюда закрывает вывод. Отказ в приоритете
+                // реального времени поломкой не является: звук идёт дальше.
+                // Приходит он из самого аудиоколлбэка, поэтому и в лог здесь
+                // писать нельзя.
+                cpal::ErrorKind::RealtimeDenied => {}
+                // Пропуск на стороне устройства: поток после него cpal
+                // приводит в чувство сам. Считаем вместе со своими пропусками.
+                cpal::ErrorKind::Xrun => glitches.note_underrun(),
                 // В колбэке ошибок можно чуть больше, но всё равно без блокировок.
-                let _ = error_tx.try_send(err.to_string());
+                _ => {
+                    let _ = error_tx.try_send(err.to_string());
+                }
             },
             None,
         )

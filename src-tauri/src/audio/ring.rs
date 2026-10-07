@@ -90,6 +90,11 @@ impl RingShared {
     pub fn underruns(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
+
+    #[inline]
+    pub fn note_underrun(&self) {
+        self.underruns.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 pub fn channel(capacity_samples: usize, volume: f32) -> (RingProducer, RingConsumer) {
@@ -216,7 +221,7 @@ impl RingConsumer {
 
     #[inline]
     pub fn note_underrun(&self) {
-        self.shared.underruns.fetch_add(1, Ordering::Relaxed);
+        self.shared.note_underrun();
     }
 
     pub fn shared(&self) -> &Arc<RingShared> {
