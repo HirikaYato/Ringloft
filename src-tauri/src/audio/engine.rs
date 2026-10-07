@@ -466,6 +466,12 @@ impl Engine {
         // а частота следующего сравнивается уже с новым устройством.
         self.failed_next = None;
         self.rate_skipped_next = None;
+        // Заготовленный следующий конвейер при загрузке выбрасывает. Метку о
+        // нём надо снять тоже: иначе повторная просьба подготовить тот же
+        // трек считается выполненной, и стык выходит с паузой (так было,
+        // когда уже играющий трек включали заново).
+        self.next_info = None;
+        self.next_track = None;
         match self.load_inner(track) {
             Ok(info) => {
                 // Порядок важен: фронт сначала узнаёт трек, потом статус.
@@ -570,6 +576,7 @@ impl Engine {
         let Some(track) = track else {
             self.pipeline.drop_next();
             self.next_info = None;
+            self.next_track = None;
             return;
         };
 
