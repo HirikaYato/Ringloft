@@ -15,7 +15,12 @@ pub fn plugins(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
 }
 
-pub fn setup(_app: &tauri::AppHandle, _settings: &Arc<SettingsStore>) {}
+pub fn setup(app: &tauri::AppHandle, _settings: &Arc<SettingsStore>) {
+    #[cfg(target_os = "android")]
+    crate::android::set_app(app);
+    #[cfg(not(target_os = "android"))]
+    let _ = app;
+}
 
 /// Командной строки у приложения на телефоне нет: файл «открыть с помощью»
 /// приезжает намерением (intent) уже после запуска.

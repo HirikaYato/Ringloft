@@ -4,10 +4,6 @@
 //! бэкенд в своём потоке (MPRIS на Linux, SMTC на Windows), и общего типа,
 //! который можно было бы держать в состоянии приложения, у них нет.
 
-// На телефоне бэкенда пока нет: обновления никто не читает, действия никто
-// не создаёт. Уйдёт вместе с появлением системного плеера Android.
-#![cfg_attr(mobile, allow(dead_code))]
-
 use std::sync::Arc;
 #[cfg(all(desktop, not(target_os = "linux")))]
 use std::time::Duration;
@@ -60,6 +56,9 @@ pub enum MediaUpdate {
 /// Что системный виджет просит сделать. Общий словарь для всех платформ:
 /// бэкенды переводят в него свои события, а решение принимается один раз
 /// и в одном месте.
+// На телефоне громкость, повтор, «показать» и «выйти» системный плеер не
+// просит: у MediaSession таких кнопок нет.
+#[cfg_attr(mobile, allow(dead_code))]
 #[derive(Debug, Clone)]
 pub enum MediaAction {
     Play,
@@ -107,8 +106,9 @@ pub fn spawn(ctx: MediaContext) -> MediaControlsHandle {
         let hwnd = window_handle(&ctx.app);
         crate::smtc::spawn(ctx, rx, hwnd)
     };
-    // На телефоне системного плеера пока нет: обновления некому принимать.
-    #[cfg(mobile)]
+    #[cfg(target_os = "android")]
+    let started = crate::android::spawn_media(ctx, rx);
+    #[cfg(target_os = "ios")]
     let started = {
         drop((ctx, rx));
         false

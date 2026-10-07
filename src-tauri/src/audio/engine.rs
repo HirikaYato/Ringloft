@@ -21,6 +21,13 @@ use crate::tags;
 
 /// Сколько спим, когда кольцо заполнено и команд нет.
 const IDLE_TICK: Duration = Duration::from_millis(5);
+/// Сколько тишины ждём, прежде чем остановить поток устройства на телефоне.
+#[cfg(target_os = "android")]
+const STREAM_IDLE: Duration = Duration::from_secs(3);
+/// Чаще этого вывод после потери устройства заново не открываем: если он
+/// рвётся раз за разом, устройства просто нет.
+#[cfg(target_os = "android")]
+const REOPEN_COOLDOWN: Duration = Duration::from_secs(2);
 /// Минимальная ёмкость кольца в сэмплах — страховка от абсурдных настроек.
 const MIN_RING_SAMPLES: usize = 8192;
 /// Ёмкость отвода: около четверти секунды стерео на 48 кГц. Больше незачем,
@@ -246,6 +253,12 @@ struct Engine {
     /// Сколько пропусков насчитало кольцо к началу текущего трека: счётчик в
     /// кольце общий на всё время жизни устройства.
     underrun_mark: u64,
+    /// С какого момента вывод молчит (пауза, стоп, конец списка).
+    #[cfg(target_os = "android")]
+    silent_since: Option<std::time::Instant>,
+    /// Когда вывод в последний раз открывали заново после потери устройства.
+    #[cfg(target_os = "android")]
+    reopened_at: Option<std::time::Instant>,
 
     error_tx: Sender<String>,
     error_rx: Receiver<String>,
@@ -297,6 +310,10 @@ impl Engine {
             ended: false,
             primed: false,
             underrun_mark: 0,
+            #[cfg(target_os = "android")]
+            silent_since: None,
+            #[cfg(target_os = "android")]
+            reopened_at: None,
             error_tx,
             error_rx,
             tap_tx: None,
@@ -324,6 +341,8 @@ impl Engine {
             self.update_position();
             self.check_stream_title();
             self.check_finished();
+            #[cfg(target_os = "android")]
+            self.sync_stream();
 
             if !progressed {
                 match self.commands.recv_timeout(IDLE_TICK) {
@@ -876,14 +895,96 @@ impl Engine {
     }
 
     fn drain_device_errors(&mut self) {
+        let mut lost = None;
         while let Ok(message) = self.error_rx.try_recv() {
             tracing::error!(%message, "ошибка аудиопотока");
-            let err = RingloftError::AudioDevice(message);
-            self.report(&err);
-            // Поток устройства мог развалиться — пересоздадим его при следующей загрузке.
+            // Поток устройства развалился: старый вывод больше не годится.
             self.output = None;
             self.producer = None;
             self.ring = None;
+            lost = Some(message);
+        }
+        if let Some(message) = lost {
+            self.after_device_loss(message);
+        }
+    }
+
+    /// Вывод откроется заново при следующей загрузке трека.
+    #[cfg(not(target_os = "android"))]
+    fn after_device_loss(&mut self, message: String) {
+        self.report(&RingloftError::AudioDevice(message));
+    }
+
+    /// На телефоне поток рвётся при каждой смене маршрута звука: воткнули
+    /// наушники, подключилась колонка. Это не поломка — открываем вывод
+    /// заново и продолжаем с того же места и в том же состоянии. О треке
+    /// никому не сообщаем: он не менялся, а повторное «трек загружен»
+    /// заставило бы мост заново считать прослушивание.
+    #[cfg(target_os = "android")]
+    fn after_device_loss(&mut self, message: String) {
+        let Some(track) = self.current_track.clone() else {
+            return;
+        };
+        if !self.pipeline.has_source() {
+            // Ничего не играет: вывод откроется со следующим треком.
+            return;
+        }
+        if self.reopened_at.is_some_and(|at| at.elapsed() < REOPEN_COOLDOWN) {
+            self.give_up_output(&RingloftError::AudioDevice(message));
+            return;
+        }
+        self.reopened_at = Some(std::time::Instant::now());
+
+        let was_playing = self.state.status() == PlaybackStatus::Playing;
+        let position_ms = self.state.position_ms();
+        if let Err(err) = self.load_inner(&track) {
+            self.give_up_output(&err);
+            return;
+        }
+        // Конвейер при загрузке выбросил заготовленный следующий трек.
+        self.next_info = None;
+        self.next_track = None;
+        if position_ms > 0 && !super::is_stream(&track.path) {
+            self.seek(position_ms);
+        }
+        if let Some(ring) = self.ring.as_ref() {
+            ring.set_playing(was_playing);
+        }
+        tracing::info!(position_ms, "устройство вывода сменилось, продолжаю на новом");
+    }
+
+    /// Открыть вывод заново не вышло: останавливаемся и говорим почему.
+    #[cfg(target_os = "android")]
+    fn give_up_output(&mut self, err: &RingloftError) {
+        self.pipeline.clear();
+        self.state.set_status(PlaybackStatus::Stopped);
+        self.emit(EngineEvent::StatusChanged(PlaybackStatus::Stopped));
+        self.report(err);
+    }
+
+    /// На телефоне молчащий поток устройства останавливаем по-настоящему:
+    /// пока он крутит тишину, система держит звуковой тракт и не даёт
+    /// процессору уснуть — плеер на паузе ел бы батарею как играющий.
+    ///
+    /// Останавливаем не сразу: за эти секунды из буфера системы доигрывает
+    /// хвост, и в нём остаётся одна тишина. Остановить мгновенно — значит
+    /// оборвать конец трека и услышать его в начале следующего.
+    #[cfg(target_os = "android")]
+    fn sync_stream(&mut self) {
+        let (Some(output), Some(ring)) = (self.output.as_ref(), self.ring.as_ref()) else {
+            self.silent_since = None;
+            return;
+        };
+        if ring.playing() {
+            self.silent_since = None;
+            output.set_running(true);
+        } else if self
+            .silent_since
+            .get_or_insert_with(std::time::Instant::now)
+            .elapsed()
+            >= STREAM_IDLE
+        {
+            output.set_running(false);
         }
     }
 

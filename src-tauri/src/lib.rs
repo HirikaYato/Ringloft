@@ -378,6 +378,14 @@ pub fn run() {
     };
 
     app.run(|handle, event| {
+        // На телефоне окно — это Activity, и система уничтожает её, когда
+        // захочет: смахнули из недавних, не хватило памяти. Рантайм, оставшись
+        // без окон, завершает цикл событий — а музыка должна играть дальше.
+        #[cfg(mobile)]
+        if let RunEvent::ExitRequested { api, code: None, .. } = &event {
+            tracing::info!("окно уничтожено, приложение остаётся работать");
+            api.prevent_exit();
+        }
         if matches!(event, RunEvent::Exit)
             && let Some(state) = handle.try_state::<state::AppState>()
         {
