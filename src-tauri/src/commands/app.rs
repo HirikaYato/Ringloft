@@ -62,6 +62,7 @@ pub fn app_paths(app: AppHandle) -> Result<AppPaths> {
 
 /// Проверка подключения к Discord. Ошибка здесь — обычное дело: Discord может
 /// быть не запущен, и об этом надо сказать прямо.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn discord_probe() -> Result<()> {
     super::blocking(crate::discord::probe).await
@@ -76,6 +77,7 @@ pub async fn discord_probe() -> Result<()> {
 /// Меню окна. Сначала просим рабочий стол — у него оно полное (рабочие
 /// столы, «поверх остальных», перенос на другой экран). Вернули `false` —
 /// фронт покажет своё.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn window_show_menu(window: tauri::Window) -> bool {
     #[cfg(target_os = "linux")]
@@ -92,6 +94,7 @@ pub async fn window_show_menu(window: tauri::Window) -> bool {
 
 /// «Поверх остальных окон». На Wayland приложение не может сделать это само,
 /// поэтому там просим KWin.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn window_always_on_top(
     app: tauri::AppHandle,
@@ -138,7 +141,7 @@ fn show_system_menu(window: &tauri::Window) -> bool {
     gdk_window.show_window_menu(&mut event)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(desktop, not(target_os = "linux")))]
 fn show_system_menu(_window: &tauri::Window) -> bool {
     false
 }

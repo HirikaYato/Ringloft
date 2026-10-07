@@ -10,7 +10,8 @@ default-run = "ringloft"
 
 [lib]
 name = "ringloft_lib"
-crate-type = ["lib"]
+# cdylib нужен Android: там приложение — библиотека, которую грузит Activity.
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
@@ -19,8 +20,6 @@ tauri-build = { version = "2.6.3", features = [] }
 tauri = { version = "2.11.5", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-opener = "2.5.5"
-tauri-plugin-window-state = "2.4.1"
-tauri-plugin-single-instance = "2.4.4"
 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -51,16 +50,8 @@ rubato = "5.0.0"
 rtrb = "0.4.0"
 realfft = "3.5.0"
 lofty = "0.25.1"
-tauri-plugin-notification = "2.4.0"
 ureq = "3.4.2"
 md-5 = "0.11.0"
-trash = "5.2.9"
-
-# Фича pipewire на Windows не активирует ничего: сама зависимость pipewire
-# объявлена в cpal под cfg(linux/bsd). realtime поднимает приоритет аудиопотока.
-[dependencies.cpal]
-version = "0.18.2"
-features = ["pipewire", "realtime"]
 
 # Отладочная сборка с opt-level=0 не успевает декодировать в реальном времени,
 # поэтому зависимости жмём полностью, свой код — умеренно.
@@ -77,13 +68,40 @@ strip = true
 # panic=unwind намеренно: паника в потоке декодера не должна убивать процесс.
 panic = "unwind"
 
+# Только десктоп: на телефоне нет ни окна с состоянием, ни второй копии, ни
+# корзины, а уведомление о треке там заменяет системный плеер. В коде это те
+# же границы, что у `#[cfg(desktop)]`.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state = "2.4.1"
+tauri-plugin-single-instance = "2.4.4"
+tauri-plugin-notification = "2.4.0"
+trash = "5.2.9"
+
+# Фича pipewire на Windows не активирует ничего: сама зависимость pipewire
+# объявлена в cpal под cfg(linux/bsd). realtime поднимает приоритет аудиопотока.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies.cpal]
+version = "0.18.2"
+features = ["pipewire", "realtime"]
+
+# Android: cpal берёт JavaVM и контекст из ndk-context, а заполняем его мы
+# сами (src/android.rs). jni — той же версии, что у Tauri.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1"
+# Без realtime: на Android эта фича просит у AAudio режим малой задержки —
+# быстрый микшер с крошечными буферами. Плееру он ни к чему (и на частоте
+# файла, отличной от системной, его всё равно не дают), а отказ cpal
+# присылает ошибкой потока.
+cpal = "0.18.2"
+
 # Системный виджет проигрывателя: на Linux свой MPRIS на zbus (src/mpris),
-# на остальных платформах souvlaki ради SMTC и MediaPlayer.
+# на остальных десктопах souvlaki ради SMTC и MediaPlayer. Android к Linux
+# здесь не относится: у него `target_os = "android"`.
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5.19.0"
 # gtk нужен ради одной вещи: попросить композитор показать своё меню окна.
 # Версия обязана совпадать с той, что тянет tao, иначе это разные типы.
 gtk = "0.18"
 
-[target.'cfg(not(target_os = "linux"))'.dependencies]
+[target.'cfg(not(any(target_os = "linux", target_os = "android", target_os = "ios")))'.dependencies]
 souvlaki = "0.8.3"

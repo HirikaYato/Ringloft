@@ -1,4 +1,7 @@
 //! Логи: цветные в stderr при разработке, ротация по дням в `app_log_dir`.
+//! На Android stderr приложения Tauri сам отводит в logcat под меткой
+//! `RustStdoutStderr` — файл там лежит в закрытой папке, и смотреть удобнее
+//! так: `adb logcat -s RustStdoutStderr`.
 //! Уровень переопределяется переменной окружения `RINGLOFT_LOG` (синтаксис EnvFilter).
 
 use std::path::Path;
@@ -25,9 +28,19 @@ pub fn init(log_dir: &Path) -> LogGuard {
         // Xing пишет «длительность по битрейту» — тоже норма, а не поломка.
         .unwrap_or_else(|_| EnvFilter::new("info,ringloft_lib=debug,symphonia_bundle_mp3=error,lofty=error"));
 
+    #[cfg(not(target_os = "android"))]
+    let console = fmt::layer().with_target(false).with_writer(std::io::stderr);
+    // Время logcat ставит сам, а цветовые коды он показал бы мусором.
+    #[cfg(target_os = "android")]
+    let console = fmt::layer()
+        .with_target(false)
+        .with_ansi(false)
+        .without_time()
+        .with_writer(std::io::stderr);
+
     let registry = tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::layer().with_target(false).with_writer(std::io::stderr))
+        .with(console)
         .with(
             fmt::layer()
                 .with_ansi(false)

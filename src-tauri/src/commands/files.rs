@@ -15,6 +15,8 @@ use crate::state::AppState;
 const PREVIEW_LIMIT: usize = 40;
 
 /// Убирает файлы в корзину и выкидывает их строки из всех вкладок.
+/// На телефоне корзины нет, а мимо неё плеер не удаляет — команды там нет.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn files_to_trash(
     state: State<'_, AppState>,

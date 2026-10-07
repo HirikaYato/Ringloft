@@ -6,9 +6,14 @@
 // audio и settings публичные: ими пользуется examples/play.rs — прогон движка
 // без окна, чтобы проверять звук отдельно от UI.
 pub mod audio;
+#[cfg(target_os = "android")]
+mod android;
 mod atomic_file;
 mod commands;
 mod cover_fetch;
+#[cfg(desktop)]
+mod desktop;
+#[cfg(desktop)]
 mod discord;
 mod error;
 mod events;
@@ -24,12 +29,15 @@ mod logging;
 mod net;
 mod lyrics;
 mod media_controls;
+#[cfg(mobile)]
+mod mobile;
 #[cfg(target_os = "linux")]
 mod mpris;
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(desktop, not(target_os = "linux")))]
 mod smtc;
 mod sleep;
 mod playback;
+#[cfg(desktop)]
 mod pipewire_rates;
 mod playlist;
 pub mod settings;
@@ -39,7 +47,15 @@ mod replaygain;
 mod tag_edit;
 mod text;
 mod tags;
+#[cfg(desktop)]
 mod tray;
+
+// Обвязка платформы: плагины, подготовка окна и то, с чем приложение
+// запустили. У десктопа и телефона она разная, а входы одни и те же.
+#[cfg(desktop)]
+use desktop as platform;
+#[cfg(mobile)]
+use mobile as platform;
 
 pub use error::{ErrorPayload, RingloftError, Result};
 
@@ -48,7 +64,6 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use tauri::{Manager, RunEvent};
-use tauri_plugin_window_state::StateFlags;
 
 /// Момент старта процесса — по нему считаем, сколько занял холодный запуск.
 static STARTED_AT: OnceLock<Instant> = OnceLock::new();
@@ -57,163 +72,17 @@ pub fn started_at() -> Instant {
     *STARTED_AT.get_or_init(Instant::now)
 }
 
-/// Файл списка воспроизведения — его открываем отдельной вкладкой.
-/// Существующие пути из командной строки: и файлы, и папки.
-/// Флаги вроде `--flag` игнорируем, чтобы не спорить с аргументами Tauri.
-fn path_arguments() -> Vec<std::path::PathBuf> {
-    std::env::args_os()
-        .skip(1)
-        .map(std::path::PathBuf::from)
-        .filter(|path| !path.to_string_lossy().starts_with('-') && path.exists())
-        .collect()
-}
-
-/// Команды управления из командной строки. Нужны там, где системные
-/// медиаклавиши до плеера не доходят: в KDE такую строку можно повесить на
-/// любое сочетание клавиш, и она дойдёт до уже запущенной копии.
-fn cli_action(argv: &[String]) -> Option<media_controls::MediaAction> {
-    argv.iter().skip(1).find_map(|arg| match arg.as_str() {
-        "--play-pause" => Some(media_controls::MediaAction::Toggle),
-        "--play" => Some(media_controls::MediaAction::Play),
-        "--pause" => Some(media_controls::MediaAction::Pause),
-        "--stop" => Some(media_controls::MediaAction::Stop),
-        "--next" => Some(media_controls::MediaAction::Next),
-        "--prev" | "--previous" => Some(media_controls::MediaAction::Previous),
-        _ => None,
-    })
-}
-
-/// Вторая копия приложения передаёт сюда свои аргументы и умирает.
-fn on_second_instance(app: &tauri::AppHandle, argv: Vec<String>, cwd: String) {
-    if let Some(action) = cli_action(&argv) {
-        // Окно наверх не поднимаем: это управление воспроизведением, а не
-        // просьба показать плеер.
-        if let Some(state) = app.try_state::<state::AppState>() {
-            let context = media_controls::MediaContext {
-                engine: state.engine.clone(),
-                playlist: Arc::clone(&state.playlist),
-                settings: Arc::clone(&state.settings),
-                app: app.clone(),
-            };
-            media_controls::handle_action(&context, action);
-        }
-        return;
-    }
-
-    media_controls::show_window(app);
-
-    // Относительный путь — относительно каталога второй копии, а не нашего:
-    // `ringloft трек.flac` из терминала иначе искал бы файл не там.
-    let base = std::path::PathBuf::from(cwd);
-    let paths: Vec<std::path::PathBuf> = argv
-        .into_iter()
-        .skip(1)
-        .filter(|arg| !arg.starts_with('-'))
-        .map(|arg| {
-            let path = std::path::PathBuf::from(&arg);
-            if path.is_relative() && !audio::is_stream(&path) {
-                base.join(path)
-            } else {
-                path
-            }
-        })
-        .filter(|path| audio::is_stream(path) || path.exists())
-        .collect();
-    if paths.is_empty() {
-        return;
-    }
-
-    let Some(state) = app.try_state::<state::AppState>() else {
-        return;
-    };
-    if let Err(err) = state.controls().open_paths(&paths) {
-        tracing::error!(%err, "не удалось включить переданные файлы");
-    }
-}
-
-/// HWND нужен SMTC на Windows; на остальных системах медиаконтролям он не нужен.
-fn window_handle(app: &tauri::AppHandle) -> Option<usize> {
-    #[cfg(target_os = "windows")]
-    {
-        app.get_webview_window("main")
-            .and_then(|window| window.hwnd().ok())
-            .map(|hwnd| hwnd.0 as usize)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = app;
-        None
-    }
-}
-
-/// События окна: закрытие в трей (если так настроено) и присмотр за тем,
-/// чтобы окно не вылезало за рабочую область экрана.
-fn setup_window(app: &tauri::AppHandle, settings: Arc<settings::SettingsStore>) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    clamp_to_work_area(&window);
-
-    let hidden = window.clone();
-    window.on_window_event(move |event| match event {
-        tauri::WindowEvent::CloseRequested { api, .. } if settings.get().ui.minimize_to_tray => {
-            api.prevent_close();
-            let _ = hidden.hide();
-        }
-        tauri::WindowEvent::Resized(_) => clamp_to_work_area(&hidden),
-        _ => {}
-    });
-}
-
-/// Размер окна восстанавливается из файла состояния, а экран с тех пор мог
-/// смениться — или размер был сохранён вместе с системной рамкой, которой у
-/// нас больше нет. Тогда окно выше экрана, и нижняя панель плеера уезжает за
-/// край: на Wayland подвинуть себя окно не может, положение назначает
-/// композитор.
-///
-/// Чинить обрезкой на пиксель нельзя: панели рабочего стола в `work_area` на
-/// Wayland не попадают, и окно ровно во всю высоту экрана всё равно не
-/// поместится. Поэтому негодный размер заменяем на размер по умолчанию.
-fn clamp_to_work_area(window: &tauri::WebviewWindow) {
-    if window.is_maximized().unwrap_or(false) || window.is_fullscreen().unwrap_or(false) {
-        return;
-    }
-    let Ok(Some(monitor)) = window.current_monitor() else {
-        return;
-    };
-    let area = monitor.work_area().size;
-    let Ok(size) = window.outer_size() else {
-        return;
-    };
-    if size.width < area.width && size.height < area.height {
-        return;
-    }
-
-    let width = DEFAULT_WINDOW.0.min(area.width * 9 / 10);
-    let height = DEFAULT_WINDOW.1.min(area.height * 9 / 10);
-    tracing::info!(
-        from = format!("{}x{}", size.width, size.height),
-        to = format!("{width}x{height}"),
-        "сохранённый размер окна не помещается на экран"
-    );
-    let _ = window.set_size(tauri::PhysicalSize::new(width, height));
-}
-
-/// Тот же размер, что в `tauri.conf.json`: к нему возвращаемся, когда
-/// сохранённый не годится.
-const DEFAULT_WINDOW: (u32, u32) = (1180, 720);
-
-/// Что играть при старте: файл из командной строки важнее сохранённой сессии,
-/// а сессия восстанавливается на паузе и с той же позиции, где её оставили.
-fn restore_session(controls: &playback::Controls<'_>) {
+/// Что играть при старте: файл, с которым запустили плеер, важнее сохранённой
+/// сессии, а сессия восстанавливается на паузе и с той же позиции, где её
+/// оставили.
+fn restore_session(controls: &playback::Controls<'_>, opened: &[std::path::PathBuf]) {
     let engine = controls.engine;
     let playlist = controls.playlist;
 
     // Плеер запустили двойным щелчком по файлу: играем его, а прошлую сессию
     // не восстанавливаем. Не заиграло ничего (не тот файл) — тогда сессия.
-    let arguments = path_arguments();
-    if !arguments.is_empty() {
-        match controls.open_paths(&arguments) {
+    if !opened.is_empty() {
+        match controls.open_paths(opened) {
             Ok(true) => return,
             Ok(false) => {}
             Err(err) => tracing::error!(%err, "не удалось открыть пути из командной строки"),
@@ -241,23 +110,15 @@ fn restore_session(controls: &playback::Controls<'_>) {
     }
 }
 
+// На телефоне приложение — библиотека: точку входа зовёт Activity.
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     started_at();
-    let builder = tauri::Builder::default()
-        // single-instance должен идти первым: он решает, жить ли этому процессу.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-            on_second_instance(app, argv, cwd);
-        }))
-        // Рамку окна рисуем сами, и восстанавливать её плагину нельзя:
-        // сохранённое состояние прошлых версий (`decorated: true`) иначе
-        // возвращает системный заголовок поверх нашего.
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                .with_state_flags(StateFlags::all() & !StateFlags::DECORATIONS)
-                .build(),
-        )
+    // Плагины платформы идут первыми: среди десктопных есть single-instance,
+    // а он решает, жить ли этому процессу.
+    let builder = platform::plugins(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
+        // opener нужен везде: им открывается страница входа Last.fm.
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let path = app.path();
@@ -283,28 +144,23 @@ pub fn run() {
                 path.app_cache_dir()?.join("covers"),
             )?;
 
-            let media = media_controls::spawn(
-                media_controls::MediaContext {
-                    engine: engine.clone(),
-                    playlist: Arc::clone(&playlist),
-                    settings: Arc::clone(&settings),
-                    app: app.handle().clone(),
-                },
-                window_handle(app.handle()),
-            );
+            let media = media_controls::spawn(media_controls::MediaContext {
+                engine: engine.clone(),
+                playlist: Arc::clone(&playlist),
+                settings: Arc::clone(&settings),
+                app: app.handle().clone(),
+            });
 
             let scrobbler = lastfm::spawn(
                 Arc::clone(&settings),
                 path.app_data_dir()?.join("lastfm-queue.json"),
             );
 
+            #[cfg(desktop)]
             let discord = discord::spawn(Arc::clone(&settings));
             let sleep = Arc::new(sleep::SleepTimer::default());
 
-            if let Err(err) = tray::build(app.handle()) {
-                tracing::error!(%err, "иконка в трее не создана");
-            }
-            setup_window(app.handle(), Arc::clone(&settings));
+            platform::setup(app.handle(), &settings);
 
             events::spawn(
                 app.handle().clone(),
@@ -315,7 +171,8 @@ pub fn run() {
                     settings: Arc::clone(&settings),
                     media,
                     scrobbler: scrobbler.clone(),
-                    discord: discord.clone(),
+                    #[cfg(desktop)]
+                    discord,
                     sleep: Arc::clone(&sleep),
                 },
                 engine_events,
@@ -333,11 +190,14 @@ pub fn run() {
                 }
             }
 
-            restore_session(&playback::Controls {
-                engine: &engine,
-                playlist: &playlist,
-                settings: &settings,
-            });
+            restore_session(
+                &playback::Controls {
+                    engine: &engine,
+                    playlist: &playlist,
+                    settings: &settings,
+                },
+                &platform::launch_paths(),
+            );
 
             // Плейлисты сверяются со своими папками в фоне: на большой
             // коллекции обход диска — это секунды, а окно ждать не должно.
@@ -361,8 +221,7 @@ pub fn run() {
 
             // `ringloft --play-pause` при незапущенном плеере: восстановили
             // сессию — и сразу выполняем то, о чём просили.
-            let argv: Vec<String> = std::env::args().collect();
-            if let Some(action) = cli_action(&argv) {
+            if let Some(action) = platform::launch_action() {
                 let context = media_controls::MediaContext {
                     engine: engine.clone(),
                     playlist: Arc::clone(&playlist),
@@ -386,11 +245,18 @@ pub fn run() {
             });
             Ok(())
         })
+        // Команды под `cfg(desktop)` — действия, которым на телефоне не над
+        // чем работать (окно, Discord, PipeWire, корзина): там их нет вовсе.
+        // Запросы состояния (шрифты, частоты) остаются и отвечают «пусто»,
+        // чтобы общие сторы фронта не знали про платформу.
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
             commands::app::app_paths,
+            #[cfg(desktop)]
             commands::app::window_show_menu,
+            #[cfg(desktop)]
             commands::app::window_always_on_top,
+            #[cfg(desktop)]
             commands::app::discord_probe,
             commands::settings::fonts_installed,
             commands::player::sleep_set,
@@ -409,6 +275,7 @@ pub fn run() {
             commands::headphones::headphones_set_enabled,
             commands::player::player_set_exact_rate,
             commands::player::audio_rate_status,
+            #[cfg(desktop)]
             commands::player::pipewire_allow_rates,
             commands::player::sleep_state,
             commands::playlist::playlist_sources,
@@ -458,6 +325,7 @@ pub fn run() {
             commands::playlist::playlist_upcoming,
             commands::playlist::playlist_transfer,
             commands::playlist::playlist_drop_missing,
+            #[cfg(desktop)]
             commands::files::files_to_trash,
             commands::files::files_rename_preview,
             commands::files::files_rename,
