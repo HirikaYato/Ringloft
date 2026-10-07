@@ -4,6 +4,10 @@
     <!-- «Доступ ко всем файлам»: музыка читается по обычным путям, как на
          десктопе. Приложение раздаётся APK, а не через Google Play. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- До Android 11 «Доступа ко всем файлам» нет: там те же пути открывает
+         обычное разрешение на память (на Android 10 — с legacy-хранилищем). -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- Музыка без окна и при погашенном экране: сервис переднего плана
          (с Android 14 — ещё и с указанием, зачем он) и его уведомление. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -17,6 +21,7 @@
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.ringloft"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity

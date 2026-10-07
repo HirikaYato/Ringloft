@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { UnlistenFn } from '@tauri-apps/api/event';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
-  import { open } from '@tauri-apps/plugin-dialog';
   import { onDestroy, onMount } from 'svelte';
 
   import ContextMenu, { type MenuItem } from './components/Common/ContextMenu.svelte';
@@ -14,6 +13,8 @@
   import WindowButtons from './components/Common/WindowButtons.svelte';
   import LibraryBrowser from './components/Library/LibraryBrowser.svelte';
   import LibraryPanel from './components/Library/LibraryPanel.svelte';
+  import PathPicker from './components/Mobile/PathPicker.svelte';
+  import PermissionGate from './components/Mobile/PermissionGate.svelte';
   import Equalizer from './components/Player/Equalizer.svelte';
   import HeadphoneEq from './components/Player/HeadphoneEq.svelte';
   import FullView from './components/Player/FullView.svelte';
@@ -30,7 +31,9 @@
   import SettingsPanel from './components/Settings/SettingsPanel.svelte';
   import { api, toErrorPayload, type AppInfo, type ErrorPayload } from './lib/api';
   import { findHotkey, type HotkeyId } from './lib/hotkeys';
+  import { pickFiles, pickFolders } from './lib/pick';
   import { applyTypography } from './lib/typography.svelte.ts';
+  import { device } from './stores/device.svelte.ts';
   import { gain } from './stores/gain.svelte.ts';
   import { library } from './stores/library.svelte.ts';
   import { lyricsScan } from './stores/lyrics.svelte.ts';
@@ -149,6 +152,7 @@
     } catch (err) {
       bootError = toErrorPayload(err);
     }
+    await device.init(info?.mobile ?? false);
     await settings.load();
     view = settings.current?.ui.view ?? 'playlist';
     await player.init();
@@ -259,18 +263,17 @@
   }
 
   async function openFiles() {
-    const selected = await open({
+    const selected = await pickFiles({
+      title: 'Добавить файлы',
+      filter: { name: 'Аудио', extensions: AUDIO_EXTENSIONS },
       multiple: true,
-      directory: false,
-      filters: [{ name: 'Аудио', extensions: AUDIO_EXTENSIONS }],
     });
-    if (Array.isArray(selected)) await addPaths(selected);
-    else if (typeof selected === 'string') await addPaths([selected]);
+    if (selected.length > 0) await addPaths(selected);
   }
 
   async function addFolder() {
-    const selected = await open({ multiple: false, directory: true });
-    if (typeof selected === 'string') await addPaths([selected]);
+    const selected = await pickFolders({ title: 'Добавить папку' });
+    if (selected.length > 0) await addPaths(selected);
   }
 
   /** В полях ввода клавиши принадлежат полю, а не плееру. */
@@ -404,6 +407,11 @@
 <CloseTabDialog />
 <SourcesDialog />
 <Notice />
+
+<!-- Только телефон: на десктопе оба ничего не рисуют (выбирают там системным
+     диалогом, а разрешения спрашивать не у кого). -->
+<PathPicker />
+<PermissionGate />
 
 {#if panel === 'keys'}
   <Modal title="Горячие клавиши" width={820} onclose={() => (panel = 'none')}>

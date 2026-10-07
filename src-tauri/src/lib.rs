@@ -18,6 +18,7 @@ mod discord;
 mod error;
 mod events;
 mod files;
+mod folders;
 mod headphones;
 mod identify;
 #[cfg(target_os = "linux")]
@@ -252,6 +253,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
             commands::app::app_paths,
+            commands::device::permissions_status,
+            #[cfg(mobile)]
+            commands::device::permissions_request,
+            commands::device::storage_roots,
+            commands::device::storage_list,
             #[cfg(desktop)]
             commands::app::window_show_menu,
             #[cfg(desktop)]

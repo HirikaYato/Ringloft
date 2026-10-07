@@ -8,10 +8,15 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     // До super.onCreate: он запускает Rust-часть, а движку звука контекст нужен сразу.
-    NowPlaying.appContext = applicationContext
-    Native.initContext(applicationContext)
+    Native.start(this)
+    Permissions.attach(this)
     super.onCreate(savedInstanceState)
     Native.activityCreated()
+  }
+
+  override fun onDestroy() {
+    Permissions.detach(this)
+    super.onDestroy()
   }
 
   override fun onNewIntent(intent: Intent) {

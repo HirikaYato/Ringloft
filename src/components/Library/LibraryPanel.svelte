@@ -1,6 +1,6 @@
 <script lang="ts">
   import { metrics } from '../../lib/typography.svelte.ts';
-  import { open } from '@tauri-apps/plugin-dialog';
+  import { pickFolders } from '../../lib/pick';
 
   import Maintenance from './Maintenance.svelte';
   import SmartEditor from './SmartEditor.svelte';
@@ -106,9 +106,8 @@
   };
 
   async function addFolder() {
-    const selected = await open({ multiple: true, directory: true });
-    if (Array.isArray(selected)) await library.addFolders(selected);
-    else if (typeof selected === 'string') await library.addFolders([selected]);
+    const selected = await pickFolders({ title: 'Папка библиотеки', multiple: true });
+    if (selected.length > 0) await library.addFolders(selected);
   }
 
   /** Двойной клик по находке — добавить в плейлист и включить. */

@@ -4,7 +4,7 @@
    * базе AutoEQ (индекс кэшируется на две недели), выбранный профиль живёт в
    * настройках и работает без сети. Можно взять и свой ParametricEQ.txt.
    */
-  import { open } from '@tauri-apps/plugin-dialog';
+  import { pickFiles } from '../../lib/pick';
 
   import { api, toErrorPayload, type HeadphoneHit } from '../../lib/api';
   import { settings } from '../../stores/settings.svelte.ts';
@@ -57,8 +57,11 @@
   }
 
   async function importFile() {
-    const picked = await open({ multiple: false, filters: [{ name: 'AutoEQ', extensions: ['txt'] }] });
-    if (typeof picked === 'string') await adopt(() => api.headphonesImport(picked), 'file');
+    const [picked] = await pickFiles({
+      title: 'Профиль наушников',
+      filter: { name: 'AutoEQ', extensions: ['txt'] },
+    });
+    if (picked) await adopt(() => api.headphonesImport(picked), 'file');
   }
 </script>
 

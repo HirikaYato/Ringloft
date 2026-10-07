@@ -32,8 +32,18 @@ object Native {
 
   private val main = Handler(Looper.getMainLooper())
 
+  /** Контекст приложения, а не Activity: он жив, пока жив процесс. */
+  lateinit var appContext: Context
+    private set
+
+  /** Зовётся до запуска Rust-части: движку звука контекст нужен сразу. */
+  fun start(context: Context) {
+    appContext = context.applicationContext
+    initContext(appContext)
+  }
+
   /** Отдаёт Rust-части JavaVM и контекст приложения: без них cpal не найдёт устройства вывода. */
-  @JvmStatic external fun initContext(context: Context)
+  @JvmStatic private external fun initContext(context: Context)
 
   /** Система создала Activity: если Rust-часть уже работает без окна, оно создаётся заново. */
   @JvmStatic external fun activityCreated()
@@ -58,4 +68,20 @@ object Native {
   fun onPlayback(status: Int, positionMs: Long) {
     main.post { NowPlaying.setPlayback(status, positionMs) }
   }
+
+  @JvmStatic fun filesAllowed(): Boolean = Permissions.files(appContext)
+
+  @JvmStatic fun notificationsAllowed(): Boolean = Permissions.notifications(appContext)
+
+  @JvmStatic
+  fun requestFiles() {
+    main.post { Permissions.requestFiles() }
+  }
+
+  @JvmStatic
+  fun requestNotifications() {
+    main.post { Permissions.requestNotifications() }
+  }
+
+  @JvmStatic fun storageRoots(): Array<String> = Permissions.storageRoots(appContext)
 }

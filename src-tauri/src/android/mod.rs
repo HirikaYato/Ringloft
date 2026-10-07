@@ -6,6 +6,7 @@
 //! вызовы на Activity и без неё падает с паникой «no available activity».
 
 mod media;
+mod system;
 
 use std::sync::{Once, OnceLock};
 
@@ -14,6 +15,7 @@ use jni::{JNIEnv, JavaVM};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 pub use media::spawn as spawn_media;
+pub use system::{files_allowed, notifications_allowed, request_permission, storage_roots};
 
 /// Главное окно — то же, что в `tauri.conf.json`.
 const MAIN_WINDOW: &str = "main";
@@ -117,33 +119,35 @@ pub extern "system" fn Java_io_github_hirikayato_ringloft_Native_initContext<'lo
 }
 
 /// Зовёт статический метод `Native` в Kotlin. `call` получает окружение JNI
-/// и класс; всё, что он создаст (строки), освобождается по выходе.
+/// и класс; всё, что он создаст (строки), освобождается по выходе, поэтому
+/// наружу он отдаёт уже значения Rust.
 ///
-/// Ошибка не роняет ничего: системный плеер — не то, из-за чего должна
-/// замолчать музыка.
-pub(crate) fn with_native(
+/// Ошибка не роняет ничего — вместо ответа приходит `None`: системный плеер
+/// не то, из-за чего должна замолчать музыка.
+pub(crate) fn with_native<T>(
     what: &'static str,
-    call: impl FnOnce(&mut JNIEnv<'_>, &GlobalRef) -> jni::errors::Result<()>,
-) {
-    let Some(bridge) = BRIDGE.get() else {
-        return;
-    };
+    call: impl FnOnce(&mut JNIEnv<'_>, &GlobalRef) -> jni::errors::Result<T>,
+) -> Option<T> {
+    let bridge = BRIDGE.get()?;
     // Поток остаётся привязанным к машине до своего конца: наши потоки
     // живут долго, и привязывать их на каждый вызов незачем.
     let mut env = match bridge.vm.attach_current_thread_permanently() {
         Ok(env) => env,
         Err(err) => {
             tracing::warn!(%err, what, "поток не привязался к Java");
-            return;
+            return None;
         }
     };
     // Поток из Rust в Java не возвращается, поэтому локальные ссылки сами
     // не освобождаются — отсюда свой кадр на каждый вызов.
-    let result = env.with_local_frame(16, |env| call(env, &bridge.class));
-    if let Err(err) = result {
-        // Неснятое исключение Java валит следующий же вызов JNI на потоке.
-        let _ = env.exception_describe();
-        let _ = env.exception_clear();
-        tracing::warn!(%err, what, "вызов в Kotlin не удался");
+    match env.with_local_frame(16, |env| call(env, &bridge.class)) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            // Неснятое исключение Java валит следующий же вызов JNI на потоке.
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
+            tracing::warn!(%err, what, "вызов в Kotlin не удался");
+            None
+        }
     }
 }

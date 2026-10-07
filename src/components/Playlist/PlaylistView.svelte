@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { open, save } from '@tauri-apps/plugin-dialog';
+  import { save } from '@tauri-apps/plugin-dialog';
 
   import ContextMenu, { type MenuItem } from '../Common/ContextMenu.svelte';
   import Prompt from '../Common/Prompt.svelte';
@@ -7,6 +7,7 @@
   import FileTools from './FileTools.svelte';
   import TagEditor from './TagEditor.svelte';
   import { formatTime, plural } from '../../lib/format';
+  import { pickFiles } from '../../lib/pick';
   import { metrics } from '../../lib/typography.svelte.ts';
   import { api, type ColumnSetting, type PlaylistRow } from '../../lib/api';
   import { DEFAULT_COLUMNS, columnDef, gridTemplate } from '../../lib/columns';
@@ -159,12 +160,12 @@
     if (viewport) viewport.scrollTop = 0;
   });
 
-  const IMPORT_FILTER = [{ name: 'Списки', extensions: ['m3u', 'm3u8', 'cue'] }];
+  const IMPORT_FILTER = { name: 'Списки', extensions: ['m3u', 'm3u8', 'cue'] };
   const EXPORT_FILTER = [{ name: 'Плейлисты', extensions: ['m3u8', 'm3u'] }];
 
   async function importList() {
-    const selected = await open({ multiple: false, filters: IMPORT_FILTER });
-    if (typeof selected === 'string') await playlist.importList(selected);
+    const [selected] = await pickFiles({ title: 'Открыть список', filter: IMPORT_FILTER });
+    if (selected) await playlist.importList(selected);
   }
 
   async function exportList() {

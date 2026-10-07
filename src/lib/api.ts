@@ -9,6 +9,10 @@ import type { AppPaths } from '../bindings/AppPaths';
 import type { AudioDevice } from '../bindings/AudioDevice';
 import type { ErrorPayload } from '../bindings/ErrorPayload';
 import type { FileOpResult } from '../bindings/FileOpResult';
+import type { FolderEntry } from '../bindings/FolderEntry';
+import type { FolderListing } from '../bindings/FolderListing';
+import type { PermissionKind } from '../bindings/PermissionKind';
+import type { Permissions } from '../bindings/Permissions';
 import type { GainFinished } from '../bindings/GainFinished';
 import type { GainProgress } from '../bindings/GainProgress';
 import type { AlbumRow } from '../bindings/AlbumRow';
@@ -82,6 +86,10 @@ export type {
   DuplicateGroup,
   ErrorPayload,
   FileOpResult,
+  FolderEntry,
+  FolderListing,
+  PermissionKind,
+  Permissions,
   RenamePreview,
   GainFinished,
   GainProgress,
@@ -160,6 +168,12 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export const api = {
   appInfo: () => call<AppInfo>('app_info'),
   appPaths: () => call<AppPaths>('app_paths'),
+  permissionsStatus: () => call<Permissions>('permissions_status'),
+  /** Только телефон: на десктопе такой команды нет. Ответ пользователя не возвращается. */
+  permissionsRequest: (kind: PermissionKind) => call<null>('permissions_request', { kind }),
+  storageRoots: () => call<FolderEntry[]>('storage_roots'),
+  storageList: (path: string, extensions: string[]) =>
+    call<FolderListing>('storage_list', { path, extensions }),
   /**
    * Просит рабочий стол показать своё меню окна. `false` — не вышло, надо
    * показать своё.

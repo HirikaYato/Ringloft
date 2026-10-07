@@ -18,6 +18,8 @@ pub struct AppInfo {
     pub version: String,
     pub tauri_version: String,
     pub debug: bool,
+    /// Телефон: у фронта для него свой корневой макет.
+    pub mobile: bool,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -44,6 +46,7 @@ pub fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         tauri_version: tauri::VERSION.to_owned(),
         debug: cfg!(debug_assertions),
+        mobile: cfg!(mobile),
     }
 }
 

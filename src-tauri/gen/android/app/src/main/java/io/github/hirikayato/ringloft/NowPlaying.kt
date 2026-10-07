@@ -1,6 +1,5 @@
 package io.github.hirikayato.ringloft
 
-import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
@@ -14,8 +13,6 @@ object NowPlaying {
   const val IDLE = 0
   const val PLAYING = 1
   const val PAUSED = 2
-
-  lateinit var appContext: Context
 
   var title = ""
     private set
@@ -67,7 +64,8 @@ object NowPlaying {
       // Сервис поднимается с началом воспроизведения, а не с запуском
       // приложения: пока ничего не играет, держать его незачем.
       try {
-        appContext.startForegroundService(Intent(appContext, PlaybackService::class.java))
+        val context = Native.appContext
+        context.startForegroundService(Intent(context, PlaybackService::class.java))
       } catch (err: Exception) {
         // Из фона система сервис запустить не даст (Android 12+).
         Log.w("Ringloft", "сервис воспроизведения не запустился", err)
