@@ -47,6 +47,7 @@ pub struct RenamePreview {
 }
 
 /// Убирает файлы в корзину. Мимо корзины не удаляем вообще никогда.
+#[cfg(desktop)]
 pub fn to_trash(paths: &[PathBuf]) -> FileOpResult {
     let mut result = FileOpResult::default();
     for path in paths {

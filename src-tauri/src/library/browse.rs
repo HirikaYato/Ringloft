@@ -81,9 +81,8 @@ pub fn folders(connection: &Connection) -> Result<Vec<NamedCount>> {
     collect_sorted(rows, |item| item.name.clone())
 }
 
-/// Альбомы целиком или только одного исполнителя.
-pub fn albums(connection: &Connection, artist: Option<&str>) -> Result<Vec<AlbumRow>> {
-    let sql = "SELECT album_key,
+/// Альбом собирается из треков: своей таблицы у альбомов нет.
+const ALBUM_SELECT: &str = "SELECT album_key,
                       MAX(album),
                       MAX(COALESCE(NULLIF(album_artist, ''), NULLIF(artist, ''))),
                       MAX(year),
@@ -93,18 +92,35 @@ pub fn albums(connection: &Connection, artist: Option<&str>) -> Result<Vec<Album
                FROM tracks
                WHERE album_key IS NOT NULL";
 
+fn album_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AlbumRow> {
+    Ok(AlbumRow {
+        key: row.get(0)?,
+        title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+        artist: row.get(2)?,
+        year: row.get::<_, Option<i64>>(3)?.map(|value| value as u32),
+        track_count: row.get::<_, i64>(4)? as u32,
+        duration_ms: row.get::<_, i64>(5)? as u64,
+        has_cover: row.get::<_, i64>(6)? != 0,
+    })
+}
+
+/// Альбомы, в которые треки добавлялись последними, — свежее сверху.
+/// Альбом считается свежим по самому новому своему треку: докупленный
+/// бонус-трек поднимает его наверх, и это то, чего ждут.
+pub fn recent_albums(connection: &Connection, limit: u32) -> Result<Vec<AlbumRow>> {
+    let sql = format!("{ALBUM_SELECT} GROUP BY album_key ORDER BY MAX(added_at) DESC, album_key LIMIT ?1");
+    let mut statement = connection.prepare_cached(&sql)?;
+    let rows = statement
+        .query_map(params![limit], album_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Альбомы целиком или только одного исполнителя.
+pub fn albums(connection: &Connection, artist: Option<&str>) -> Result<Vec<AlbumRow>> {
+    let sql = ALBUM_SELECT;
+
     let mut rows = Vec::new();
-    let push = |row: &rusqlite::Row<'_>| -> rusqlite::Result<AlbumRow> {
-        Ok(AlbumRow {
-            key: row.get(0)?,
-            title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-            artist: row.get(2)?,
-            year: row.get::<_, Option<i64>>(3)?.map(|value| value as u32),
-            track_count: row.get::<_, i64>(4)? as u32,
-            duration_ms: row.get::<_, i64>(5)? as u64,
-            has_cover: row.get::<_, i64>(6)? != 0,
-        })
-    };
 
     match artist {
         Some(artist) => {
@@ -112,14 +128,14 @@ pub fn albums(connection: &Connection, artist: Option<&str>) -> Result<Vec<Album
                 "{sql} AND COALESCE(NULLIF(album_artist, ''), NULLIF(artist, '')) = ?1 GROUP BY album_key"
             );
             let mut statement = connection.prepare_cached(&sql)?;
-            for row in statement.query_map(params![artist], |row| push(row))? {
+            for row in statement.query_map(params![artist], album_row)? {
                 rows.push(row?);
             }
         }
         None => {
             let sql = format!("{sql} GROUP BY album_key");
             let mut statement = connection.prepare_cached(&sql)?;
-            for row in statement.query_map([], |row| push(row))? {
+            for row in statement.query_map([], album_row)? {
                 rows.push(row?);
             }
         }

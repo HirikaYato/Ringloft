@@ -28,6 +28,8 @@ export type EventMap = {
   /** Таймер сна сработал или снялся сам. */
   'player:sleep': SleepState;
   'app:error': ErrorPayload;
+  /** Телефон: нажата системная кнопка «назад». */
+  'app:back': null;
   'playlist:changed': null;
   'library:scan-progress': ScanProgress;
   'library:scan-finished': ScanFinished;

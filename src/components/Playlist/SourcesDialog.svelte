@@ -4,7 +4,7 @@
    * файлы и убирает пропавшие; недоступная папка (диск не подключён) не
    * считается пустой. Правки применяются сразу — кнопки «Сохранить» нет.
    */
-  import { open } from '@tauri-apps/plugin-dialog';
+  import { pickFolders } from '../../lib/pick';
 
   import Modal from '../Common/Modal.svelte';
   import { api, type PlaylistSources } from '../../lib/api';
@@ -29,8 +29,7 @@
   }
 
   async function addFolder() {
-    const selected = await open({ multiple: true, directory: true });
-    const picked = Array.isArray(selected) ? selected : selected ? [selected] : [];
+    const picked = await pickFolders({ title: 'Папка плейлиста', multiple: true });
     if (picked.length > 0 && data) await save([...data.sources, ...picked]);
   }
 

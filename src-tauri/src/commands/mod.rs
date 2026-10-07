@@ -2,6 +2,7 @@
 //! преобразование ошибки в `RingloftError`. Никакой логики здесь не живёт.
 
 pub mod app;
+pub mod device;
 pub mod files;
 pub mod headphones;
 pub mod identify;

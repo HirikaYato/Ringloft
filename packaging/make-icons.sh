@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Собирает иконки приложения из packaging/logo.svg и logo-small.svg.
+# Собирает иконки приложения из packaging/logo.svg и logo-small.svg, а для
+# Android — ещё и из logo-android.svg.
 #
 # Крупные размеры берутся от тонкого знака, мелкие (16-48) — от плотного:
 # на 32 пикселях тонкие кольца исчезают в сглаживании. Обычный
@@ -20,11 +21,27 @@ render "$root/packaging/logo.svg" 1024 "$work/big-1024.png"
 for size in 128 256; do render "$root/packaging/logo.svg" "$size" "$work/big-$size.png"; done
 for size in 16 24 30 32 44 48 64; do render "$root/packaging/logo-small.svg" "$size" "$work/small-$size.png"; done
 
-echo "== полный набор через tauri icon =="
-(cd "$root" && npm run --silent tauri -- icon "$work/big-1024.png")
+# Адаптивная иконка Android — два слоя: знак без плашки и сплошной фон того
+# же цвета, что плашка в logo.svg. Форму (круг, скруглённый квадрат) вырезает
+# оболочка телефона, поэтому готовую плашку туда отдавать нельзя.
+render "$root/packaging/logo-android.svg" 1024 "$work/android-fg.png"
+echo '<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108"><rect width="108" height="108" fill="#090B10"/></svg>' \
+  | rsvg-convert -o "$work/android-bg.png"
+cat > "$work/icons.json" <<'JSON'
+{
+  "default": "big-1024.png",
+  "android_fg": "android-fg.png",
+  "android_bg": "android-bg.png",
+  "android_fg_scale": 100
+}
+JSON
 
-# Мобильных целей у плеера нет, а tauri icon кладёт наборы и для них.
-rm -rf "$icons/android" "$icons/ios"
+echo "== полный набор через tauri icon =="
+# Набор для Android tauri icon кладёт прямо в проект (gen/android/…/res).
+(cd "$root" && npm run --silent tauri -- icon "$work/icons.json")
+
+# Цели под iOS у плеера нет, а tauri icon кладёт набор и для неё.
+rm -rf "$icons/ios"
 
 echo "== мелкие размеры — от плотного знака =="
 cp "$work/small-32.png" "$icons/32x32.png"

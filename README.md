@@ -1,8 +1,8 @@
 # Ringloft
 
-A fast desktop audio player for large local music collections — tens of
-thousands of tracks, lossless files, CUE sheets, synced lyrics. Runs on Linux
-(X11 and Wayland) and Windows 10/11.
+A fast audio player for large local music collections — tens of thousands of
+tracks, lossless files, CUE sheets, synced lyrics. Runs on Linux (X11 and
+Wayland) and Windows 10/11, with a phone version for Android 8.0 and newer.
 
 > The interface is currently available in Russian only.
 
@@ -62,6 +62,7 @@ Get the latest version from the [Releases page](../../releases/latest):
 | Ubuntu, Debian, Mint | `ringloft_…_amd64.deb` | `sudo apt install ./ringloft_*_amd64.deb` |
 | Fedora, openSUSE | `ringloft-…x86_64.rpm` | `sudo dnf install ./ringloft-*.x86_64.rpm` |
 | Any other Linux | `ringloft_…_amd64.AppImage` | `chmod +x ringloft_*.AppImage`, then run it |
+| Android 8.0+ | `Ringloft_…_android.apk` | open the file on the phone and allow installing from this source |
 
 Notes:
 - **Windows** needs Microsoft Edge WebView2. It is already part of Windows 11
@@ -71,6 +72,13 @@ Notes:
 - **Linux** packages need a reasonably recent system (glibc 2.39 or newer:
   Ubuntu 24.04, Debian 13, Fedora 40, current Arch, or newer). On older
   systems, [build from source](#building-from-source).
+
+- **Android** asks for two permissions on first launch. *All files access*
+  is required: Ringloft plays your music straight from the phone's folders
+  instead of copying it, so it has to read them. *Notifications* are optional
+  and only show the player card in the shade and on the lock screen. The APK
+  covers 64-bit and 32-bit ARM phones. It is distributed here, not on Google
+  Play.
 
 ## Getting started
 

@@ -149,8 +149,15 @@ pub(crate) fn scan(sources: &[PathBuf]) -> SourceScan {
         files: Vec::new(),
     };
     for dir in sources {
+        let before = found.files.len();
         if dir.is_dir() {
             super::store::collect_dir(dir, &mut found.files);
+        }
+        // Папка, из которой не пришло ни одного файла, считается
+        // недоступной, даже если она на месте: так выглядит и точка
+        // монтирования без диска, и любая папка на телефоне, у которого
+        // отозвали доступ к файлам, — Android показывает её пустой.
+        if found.files.len() > before {
             found.reachable.push(dir.clone());
         } else {
             found.unreachable.push(dir.clone());
@@ -288,6 +295,26 @@ mod tests {
         let plan = list.reconcile(&scan_of(&[], &[]));
         assert!(plan.add.is_empty());
         assert!(plan.remove.is_empty());
+    }
+
+    /// Папка на месте, но пустая: так Android показывает её без доступа к
+    /// файлам. Строки списка при этом должны уцелеть.
+    #[test]
+    fn empty_folder_counts_as_unreachable() {
+        let dir = std::env::temp_dir().join(format!("ringloft-sources-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let found = scan(std::slice::from_ref(&dir));
+        assert!(found.reachable.is_empty());
+        assert_eq!(found.unreachable, std::slice::from_ref(&dir));
+
+        let mut list = list(&[]);
+        list.add_items(vec![PlaylistItem::from_path(1, dir.join("a.flac"))], None);
+        list.add_source(dir.clone());
+        assert!(list.reconcile(&found).remove.is_empty());
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

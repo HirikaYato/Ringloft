@@ -5,11 +5,13 @@
 //! который можно было бы держать в состоянии приложения, у них нет.
 
 use std::sync::Arc;
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(desktop, not(target_os = "linux")))]
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(desktop)]
+use tauri::Manager;
 
 use crate::audio::{AudioCmd, EngineHandle, PlaybackStatus};
 use crate::playback::Controls;
@@ -18,7 +20,7 @@ use crate::settings::{RepeatMode, SettingsStore};
 
 /// На сколько мотает «перемотка без уточнения» из системного виджета.
 /// В MPRIS шаг приходит в самом вызове, поэтому нужен только souvlaki.
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(desktop, not(target_os = "linux")))]
 pub const SEEK_STEP: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
@@ -54,6 +56,9 @@ pub enum MediaUpdate {
 /// Что системный виджет просит сделать. Общий словарь для всех платформ:
 /// бэкенды переводят в него свои события, а решение принимается один раз
 /// и в одном месте.
+// На телефоне громкость, повтор, «показать» и «выйти» системный плеер не
+// просит: у MediaSession таких кнопок нет.
+#[cfg_attr(mobile, allow(dead_code))]
 #[derive(Debug, Clone)]
 pub enum MediaAction {
     Play,
@@ -91,16 +96,23 @@ impl MediaControlsHandle {
     }
 }
 
-/// `hwnd` передаётся числом, потому что сырой указатель не Send;
-/// обратно в указатель его превращает уже сам поток (нужно только Windows).
-pub fn spawn(ctx: MediaContext, hwnd: Option<usize>) -> MediaControlsHandle {
+pub fn spawn(ctx: MediaContext) -> MediaControlsHandle {
     let (tx, rx) = crossbeam_channel::unbounded::<MediaUpdate>();
-    let _ = hwnd;
 
     #[cfg(target_os = "linux")]
     let started = crate::mpris::spawn(ctx, rx);
-    #[cfg(not(target_os = "linux"))]
-    let started = crate::smtc::spawn(ctx, rx, hwnd);
+    #[cfg(all(desktop, not(target_os = "linux")))]
+    let started = {
+        let hwnd = window_handle(&ctx.app);
+        crate::smtc::spawn(ctx, rx, hwnd)
+    };
+    #[cfg(target_os = "android")]
+    let started = crate::android::spawn_media(ctx, rx);
+    #[cfg(target_os = "ios")]
+    let started = {
+        drop((ctx, rx));
+        false
+    };
 
     if started {
         MediaControlsHandle { tx: Some(tx) }
@@ -154,11 +166,32 @@ pub fn handle_action(ctx: &MediaContext, action: MediaAction) {
     }
 }
 
+/// HWND нужен SMTC на Windows; macOS он не нужен. Передаётся числом, потому
+/// что сырой указатель не Send: обратно в указатель его превращает сам поток.
+#[cfg(all(desktop, not(target_os = "linux")))]
+fn window_handle(app: &AppHandle) -> Option<usize> {
+    #[cfg(target_os = "windows")]
+    {
+        app.get_webview_window("main")
+            .and_then(|window| window.hwnd().ok())
+            .map(|hwnd| hwnd.0 as usize)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        None
+    }
+}
+
 /// Достаёт окно из трея: системный виджет умеет просить показать плеер.
+/// На телефоне окно не прячется, и показывать нечего.
 pub fn show_window(app: &AppHandle) {
+    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+    #[cfg(mobile)]
+    let _ = app;
 }

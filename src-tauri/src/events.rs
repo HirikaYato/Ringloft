@@ -11,10 +11,12 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, select};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
+#[cfg(desktop)]
 use tauri_plugin_notification::NotificationExt;
 use ts_rs::TS;
 
 use crate::audio::{AudioCmd, EngineEvent, EngineHandle, PlaybackStatus, TrackInfo};
+#[cfg(desktop)]
 use crate::discord::{DiscordPresence, Presence};
 use crate::library::{LibraryEvent, LibraryStore, file_url};
 use crate::lastfm::{self, Scrobbler};
@@ -22,6 +24,7 @@ use crate::media_controls::{MediaControlsHandle, MediaUpdate, TrackMeta};
 use crate::playback::Controls;
 use crate::playlist::{PlaylistEvent, PlaylistStore};
 use crate::settings::SettingsStore;
+#[cfg(desktop)]
 use crate::tray;
 
 pub const EVENT_TICK: &str = "player:tick";
@@ -66,12 +69,15 @@ pub struct Bridge {
     pub settings: Arc<SettingsStore>,
     pub media: MediaControlsHandle,
     pub scrobbler: Scrobbler,
+    #[cfg(desktop)]
     pub discord: DiscordPresence,
     pub sleep: Arc<crate::sleep::SleepTimer>,
 }
 
 /// Что показывать в Discord: сам трек. Позиция и статус берутся с тика, а не
 /// хранятся здесь — иначе они успевали бы устареть.
+// Без Discord читается одна станция: по ней подписывают название из эфира.
+#[cfg_attr(mobile, allow(dead_code))]
 #[derive(Debug, Clone, PartialEq)]
 struct NowPlaying {
     title: String,
@@ -174,6 +180,7 @@ pub fn spawn(
                     // Той же меркой обновляем Discord: перемотку он иначе не
                     // заметит (метки времени у него абсолютные), а сам поток
                     // отбрасывает повторы и держит свой предел частоты.
+                    #[cfg(desktop)]
                     bridge.discord.update(discord_presence(
                         now.as_ref(),
                         last_tick.status,
@@ -253,6 +260,7 @@ fn station_name(row_title: &str) -> String {
 }
 
 /// Состояние для Discord. `None` — показывать нечего.
+#[cfg(desktop)]
 fn discord_presence(
     now: Option<&NowPlaying>,
     status: PlaybackStatus,
@@ -308,6 +316,7 @@ fn handle_engine(
             rotate_stream_play(bridge, scrobble, &title);
             // У радио название трека меняется без смены «трека»: обновляем
             // и фронт, и системный виджет, и подсказку в трее.
+            #[cfg(desktop)]
             tray::set_tooltip(app, &format!("Ringloft — {title}"));
             // Название из эфира приходит одной строкой «Исполнитель - Трек»:
             // не разобрав её, и виджет, и Discord показывают исполнителя
@@ -517,13 +526,18 @@ fn announce_track(app: &AppHandle, bridge: &Bridge, track: &TrackInfo) -> NowPla
         station: crate::audio::is_stream(Path::new(&track.path)).then(|| station_name(&title)),
     };
 
-    let tooltip = match artist.as_deref() {
-        Some(artist) => format!("Ringloft — {artist} — {title}"),
-        None => format!("Ringloft — {title}"),
-    };
-    tray::set_tooltip(app, &tooltip);
+    #[cfg(desktop)]
+    {
+        let tooltip = match artist.as_deref() {
+            Some(artist) => format!("Ringloft — {artist} — {title}"),
+            None => format!("Ringloft — {title}"),
+        };
+        tray::set_tooltip(app, &tooltip);
+    }
 
     // Текст уведомления собираем до того, как поля уедут в медиавиджет.
+    // На телефоне его не шлём: там о треке говорит системный плеер.
+    #[cfg(desktop)]
     let notice = (
         title.clone(),
         match (artist.as_deref(), album.as_deref()) {
@@ -547,8 +561,10 @@ fn announce_track(app: &AppHandle, bridge: &Bridge, track: &TrackInfo) -> NowPla
     let library = Arc::clone(&bridge.library);
     let media = bridge.media.clone();
     let path = std::path::PathBuf::from(&track.path);
-    let notify = bridge.settings.get().ui.track_notifications;
-    let app = app.clone();
+    #[cfg(desktop)]
+    let (notify, app) = (bridge.settings.get().ui.track_notifications, app.clone());
+    #[cfg(mobile)]
+    let _ = app;
     let spawned = std::thread::Builder::new()
         .name("ringloft-cover".into())
         .spawn(move || {
@@ -556,6 +572,7 @@ fn announce_track(app: &AppHandle, bridge: &Bridge, track: &TrackInfo) -> NowPla
                 .then(|| library.track_cover_path(&path))
                 .flatten();
             media.send(MediaUpdate::Cover(cover.as_deref().map(file_url)));
+            #[cfg(desktop)]
             if notify {
                 notify_track(&app, &notice, cover.as_deref());
             }
@@ -570,6 +587,7 @@ fn announce_track(app: &AppHandle, bridge: &Bridge, track: &TrackInfo) -> NowPla
 /// Всплывающее уведомление о новом треке. Шлётся из того же потока, что и
 /// обложка: иконкой уведомления служит она же, а ждать её в мосте событий
 /// нельзя — он обязан продолжать рассылать тики.
+#[cfg(desktop)]
 fn notify_track(app: &AppHandle, notice: &(String, Option<String>), cover: Option<&Path>) {
     let mut builder = app.notification().builder().title(&notice.0);
     if let Some(body) = notice.1.as_deref() {

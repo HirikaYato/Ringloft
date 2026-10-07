@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Свои строки держим отдельно от strings.xml: тот создаёт Tauri. -->
+<resources>
+    <string name="playback_channel">Воспроизведение</string>
+    <string name="action_previous">Предыдущий</string>
+    <string name="action_play">Играть</string>
+    <string name="action_pause">Пауза</string>
+    <string name="action_next">Следующий</string>
+</resources>

@@ -129,14 +129,33 @@ fn scan(
         }
     }
 
-    // 4. Чистим то, чего на диске больше нет.
+    // 4. Чистим то, чего на диске больше нет, — но только в папках, из
+    // которых обход что-то принёс. Папка без единого файла чаще недоступна,
+    // чем опустела: диск не подключён, карту памяти вынули, у телефона
+    // отозвали доступ к файлам. Вычистить её треки значит потерять оценки и
+    // счётчики, а вернуть их нечем.
     send(events, LibraryEvent::Progress(ScanProgress::phase(ScanPhase::Cleaning)));
-    let gone: Vec<String> = known
-        .keys()
-        .filter(|path| !on_disk.contains(path.as_str()))
-        .filter(|path| belongs_to(path, folders))
+    let alive: Vec<PathBuf> = folders
+        .iter()
+        .filter(|folder| files.iter().any(|file| file.path.starts_with(folder)))
         .cloned()
         .collect();
+    let missing: Vec<&String> = known
+        .keys()
+        .filter(|path| !on_disk.contains(path.as_str()))
+        .collect();
+    let gone: Vec<String> = missing
+        .iter()
+        .filter(|path| belongs_to(path, &alive))
+        .map(|path| (*path).clone())
+        .collect();
+    let kept = missing.iter().filter(|path| belongs_to(path, folders)).count() - gone.len();
+    if kept > 0 {
+        tracing::warn!(
+            kept,
+            "папка библиотеки не отдала ни одного файла: её треки оставлены в базе"
+        );
+    }
     let removed = delete_missing(db, &gone)?;
 
     Ok(Outcome::Done { added, updated, removed })
@@ -257,10 +276,11 @@ fn delete_missing(db: &Arc<Db>, paths: &[String]) -> Result<u32> {
 
 /// Удалять можно только то, что лежит внутри просканированных папок: иначе
 /// скан одной папки вычистил бы из базы всю остальную библиотеку.
+/// Сравнение по частям пути, а не по началу строки: иначе `/music2/a.flac`
+/// считался бы лежащим в `/music`, и скан одной папки вычищал бы соседнюю.
 fn belongs_to(path: &str, folders: &[PathBuf]) -> bool {
-    folders
-        .iter()
-        .any(|folder| path.starts_with(&*folder.to_string_lossy()))
+    let path = std::path::Path::new(path);
+    folders.iter().any(|folder| path.starts_with(folder))
 }
 
 fn unix_seconds(time: Option<SystemTime>) -> i64 {
@@ -289,3 +309,68 @@ ON CONFLICT(path) DO UPDATE SET
     size_bytes = excluded.size_bytes, mtime = excluded.mtime,
     scanned_at = excluded.scanned_at
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::test_wav;
+
+    /// Папка с двумя треками и пустая база рядом.
+    fn fixture(name: &str) -> (Arc<Db>, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("ringloft-scan-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("music")).expect("создание папки");
+        for file in ["a.wav", "b.wav"] {
+            test_wav::constant(&dir.join("music").join(file), 44_100, 2, 1_000, 0.0);
+        }
+        let db = Arc::new(Db::open(dir.join("library.sqlite")).expect("создание базы"));
+        (db, dir)
+    }
+
+    fn rescan(db: &Arc<Db>, folders: &[PathBuf]) -> (u32, u32, u32) {
+        let (events, _rx) = crossbeam_channel::unbounded();
+        let cancel = Arc::new(AtomicBool::new(false));
+        match scan(db, folders, &cancel, &events).expect("скан") {
+            Outcome::Done { added, updated, removed } => (added, updated, removed),
+            Outcome::Cancelled => panic!("скан отменён"),
+        }
+    }
+
+    fn tracks(db: &Arc<Db>) -> usize {
+        load_known(db).expect("чтение базы").len()
+    }
+
+    #[test]
+    fn removes_what_vanished_from_a_live_folder() {
+        let (db, dir) = fixture("vanished");
+        let folders = [dir.join("music")];
+        assert_eq!(rescan(&db, &folders), (2, 0, 0));
+
+        std::fs::remove_file(dir.join("music/b.wav")).expect("удаление");
+        assert_eq!(rescan(&db, &folders), (0, 0, 1));
+        assert_eq!(tracks(&db), 1);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Отключённый диск или отозванный доступ выглядят как пустая папка.
+    #[test]
+    fn unreachable_folder_keeps_its_tracks() {
+        let (db, dir) = fixture("unreachable");
+        let folders = [dir.join("music")];
+        assert_eq!(rescan(&db, &folders), (2, 0, 0));
+
+        std::fs::rename(dir.join("music"), dir.join("unplugged")).expect("переименование");
+        assert_eq!(rescan(&db, &folders), (0, 0, 0));
+        assert_eq!(tracks(&db), 2);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn neighbour_with_the_same_prefix_is_not_ours() {
+        let folders = [PathBuf::from("/music")];
+        assert!(belongs_to("/music/a.flac", &folders));
+        assert!(!belongs_to("/music2/a.flac", &folders));
+    }
+}

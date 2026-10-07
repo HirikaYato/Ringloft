@@ -179,13 +179,20 @@ pub struct RateStatus {
 fn rate_status(settings: &crate::settings::SettingsStore, engine: &crate::audio::EngineHandle) -> RateStatus {
     let settings = settings.get();
     let snapshot = engine.snapshot();
+    #[cfg(desktop)]
+    let (can_manage, managed) = (
+        crate::pipewire_rates::available(),
+        crate::pipewire_rates::enabled_by_us(),
+    );
+    #[cfg(mobile)]
+    let (can_manage, managed) = (false, false);
     RateStatus {
         exact: settings.audio.exact_rate,
         track_rate: snapshot.track.as_ref().map(|track| track.sample_rate),
         device_rate: snapshot.device_rate,
         supported: crate::audio::supported_rates(settings.audio.device_id.as_deref()),
-        can_manage: crate::pipewire_rates::available(),
-        managed: crate::pipewire_rates::enabled_by_us(),
+        can_manage,
+        managed,
     }
 }
 
@@ -207,6 +214,7 @@ pub fn player_set_exact_rate(state: State<'_, AppState>, exact: bool) -> Result<
 
 /// Разрешить или запретить PipeWire частоты файлов. Меняет настройку всей
 /// системы, поэтому зовётся только кнопкой в настройках.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn pipewire_allow_rates(state: State<'_, AppState>, enabled: bool) -> Result<RateStatus> {
     let (settings, engine) = (std::sync::Arc::clone(&state.settings), state.engine.clone());

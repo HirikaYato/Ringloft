@@ -18,13 +18,17 @@ pub fn settings_patch(state: State<'_, AppState>, patch: serde_json::Value) -> R
 
 /// Семейства шрифтов с кириллицей, установленные в системе, — для выбора
 /// шрифта в настройках. Вебвью перечислять шрифты не умеет, поэтому
-/// спрашиваем fontconfig. Нет его (Windows) — список пустой, и остаются
-/// встроенные шрифты.
+/// спрашиваем fontconfig. Нет его (Windows, телефон) — список пустой, и
+/// остаются встроенные шрифты.
 #[tauri::command]
 pub async fn fonts_installed() -> Result<Vec<String>> {
-    super::blocking(|| Ok(installed_fonts())).await
+    #[cfg(desktop)]
+    return super::blocking(|| Ok(installed_fonts())).await;
+    #[cfg(mobile)]
+    Ok(Vec::new())
 }
 
+#[cfg(desktop)]
 fn installed_fonts() -> Vec<String> {
     let output = std::process::Command::new("fc-list")
         .args([":lang=ru", "--format", "%{family[0]}\\n"])

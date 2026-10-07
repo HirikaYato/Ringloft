@@ -17,5 +17,9 @@ export default defineConfig({
     // Vite 8 минифицирует через oxc; esbuild больше не идёт в комплекте.
     minify: 'oxc',
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // Мелкие файлы Vite вшивает в CSS как data:-адреса, а политика
+    // содержимого их не пускает (default-src 'self'): так терялись самые
+    // маленькие наборы символов встроенных шрифтов. Пусть остаются файлами.
+    assetsInlineLimit: 0,
   },
 });

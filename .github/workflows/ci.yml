@@ -49,3 +49,42 @@ jobs:
         run: |
           cargo test
           git diff --exit-code ../src/bindings
+
+  # Телефон: тот же крейт под cfg(mobile) плюс Kotlin-часть. Собирается
+  # отладочный APK целиком — иначе Kotlin не проверить, а ломается он тише
+  # всего: десктопная сборка его не видит.
+  android:
+    runs-on: ubuntu-24.04
+    env:
+      # Та же версия, что стоит у разработчика: с другой NDK libopus и ring
+      # могут собраться иначе.
+      NDK_VERSION: 29.0.14206865
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+
+      - name: Android NDK
+        run: |
+          # `yes` обрывается, когда sdkmanager закончил, — это не ошибка;
+          # получилось или нет, видно по самой папке.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null || true
+          test -d "$ANDROID_HOME/ndk/$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - name: Debug APK
+        run: npm run android -- build --debug --apk --target aarch64

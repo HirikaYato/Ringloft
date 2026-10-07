@@ -77,13 +77,36 @@ fn usable(devices: impl Iterator<Item = AudioDevice>) -> Vec<AudioDevice> {
 pub struct OutputStream {
     stream: cpal::Stream,
     pub device_name: String,
+    /// Крутится ли сам поток устройства (см. `set_running`).
+    #[cfg(target_os = "android")]
+    running: std::cell::Cell<bool>,
 }
 
 impl OutputStream {
     pub fn start(&self) -> Result<()> {
         self.stream
             .play()
-            .map_err(|err| RingloftError::AudioDevice(err.to_string()))
+            .map_err(|err| RingloftError::AudioDevice(err.to_string()))?;
+        #[cfg(target_os = "android")]
+        self.running.set(true);
+        Ok(())
+    }
+
+    /// Останавливает или снова запускает сам поток устройства, а не только
+    /// подачу звука в него. Повторная просьба о том же ничего не делает.
+    #[cfg(target_os = "android")]
+    pub fn set_running(&self, running: bool) {
+        if self.running.replace(running) == running {
+            return;
+        }
+        let result = if running {
+            self.stream.play()
+        } else {
+            self.stream.pause()
+        };
+        if let Err(err) = result {
+            tracing::warn!(%err, running, "поток устройства не переключился");
+        }
     }
 }
 
@@ -128,6 +151,7 @@ pub fn open(
     let config = supported.config();
 
     let shared: Arc<RingShared> = Arc::clone(consumer.shared());
+    let glitches = Arc::clone(&shared);
     let mut gain = shared.volume();
 
     let stream = device
@@ -163,9 +187,20 @@ pub fn open(
 
                 consumer.advance_frames(taken / channels);
             },
-            move |err| {
+            move |err| match err.kind() {
+                // Сюда cpal присылает не только поломки, а движок на любое
+                // сообщение отсюда закрывает вывод. Отказ в приоритете
+                // реального времени поломкой не является: звук идёт дальше.
+                // Приходит он из самого аудиоколлбэка, поэтому и в лог здесь
+                // писать нельзя.
+                cpal::ErrorKind::RealtimeDenied => {}
+                // Пропуск на стороне устройства: поток после него cpal
+                // приводит в чувство сам. Считаем вместе со своими пропусками.
+                cpal::ErrorKind::Xrun => glitches.note_underrun(),
                 // В колбэке ошибок можно чуть больше, но всё равно без блокировок.
-                let _ = error_tx.try_send(err.to_string());
+                _ => {
+                    let _ = error_tx.try_send(err.to_string());
+                }
             },
             None,
         )
@@ -176,6 +211,8 @@ pub fn open(
     Ok(OutputStream {
         stream,
         device_name,
+        #[cfg(target_os = "android")]
+        running: std::cell::Cell::new(false),
     })
 }
 

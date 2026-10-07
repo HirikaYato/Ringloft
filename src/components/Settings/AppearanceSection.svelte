@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { api } from '../../lib/api';
   import { BUILTIN_FONTS, FONT_SIZE } from '../../lib/typography.svelte.ts';
+  import { device } from '../../stores/device.svelte.ts';
   import { settings } from '../../stores/settings.svelte.ts';
 
   /** Готовые акценты: свой цвет тут же рядом, но с кнопки попасть быстрее. */
@@ -152,7 +153,10 @@
           по умолчанию
         </button>
       </div>
-      <p class="hint">Ctrl+= и Ctrl+− делают то же из любого места, Ctrl+0 — сброс.</p>
+      <!-- На телефоне клавиатуры нет — подсказка про сочетания там лишняя. -->
+      {#if !device.mobile}
+        <p class="hint">Ctrl+= и Ctrl+− делают то же из любого места, Ctrl+0 — сброс.</p>
+      {/if}
     </div>
   </div>
 
