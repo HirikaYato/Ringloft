@@ -5,10 +5,12 @@
 # Пути по умолчанию — те, куда всё ставится без root: JDK 17 в
 # ~/.jdks/temurin-17, SDK в ~/Android/Sdk, NDK внутри него. Своё расположение
 # задаётся теми же переменными заранее (JDK — через RINGLOFT_JAVA_HOME).
+# В CI этот же скрипт: SDK раннер задаёт сам, NDK называет сборка.
 
 # Gradle 8.14 из шаблона Tauri не запускается на JDK новее 24, поэтому берём
-# 17 отдельно от системной и не глядя на общий JAVA_HOME.
-export JAVA_HOME="${RINGLOFT_JAVA_HOME:-$HOME/.jdks/temurin-17}"
+# 17 отдельно от системной и не глядя на общий JAVA_HOME. JAVA_HOME_17_X64 —
+# так JDK 17 называется на раннерах GitHub.
+export JAVA_HOME="${RINGLOFT_JAVA_HOME:-${JAVA_HOME_17_X64:-$HOME/.jdks/temurin-17}}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 
 if [ -z "${NDK_HOME:-}" ]; then

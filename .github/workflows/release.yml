@@ -1,6 +1,6 @@
 # Релиз по тегу: `git tag v0.2.0 && git push origin v0.2.0` собирает пакеты
-# для Linux и Windows и складывает их в черновик релиза на GitHub. Черновик
-# публикуется руками — после того как его посмотрели.
+# для Linux и Windows и APK для Android и складывает их в черновик релиза на
+# GitHub. Черновик публикуется руками — после того как его посмотрели.
 name: Release
 
 on:
@@ -85,3 +85,86 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --bundles ${{ matrix.bundles }}
+
+  # APK для Android: один файл на обе архитектуры ARM, подписанный ключом из
+  # секретов репозитория. Идёт после десктопных сборок: черновик релиза к
+  # этому моменту уже создан, и APK просто докладывается в него. Создавать
+  # черновик наперегонки нельзя — у одного тега их получилось бы два.
+  android:
+    needs: build
+    runs-on: ubuntu-24.04
+    env:
+      NDK_VERSION: 29.0.14206865
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android-release
+
+      - name: Android NDK
+        run: |
+          # `yes` обрывается, когда sdkmanager закончил, — это не ошибка;
+          # получилось или нет, видно по самой папке.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null || true
+          test -d "$ANDROID_HOME/ndk/$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      # Ключ живёт в секретах, в репозитории его нет. Без него сборка
+      # останавливается: неподписанный APK телефон не поставит, а подписанный
+      # другим ключом не обновит уже установленное приложение.
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Нет секретов подписи: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            # Пустой пароль ключа значит «тот же, что у хранилища».
+            if [ -n "$KEY_PASSWORD" ]; then echo "keyPassword=$KEY_PASSWORD"; fi
+          } > src-tauri/gen/android/keystore.properties
+
+      - name: Release APK
+        run: npm run android -- build --apk --target aarch64 --target armv7
+
+      - name: Name the APK
+        id: apk
+        run: |
+          version=$(node -p "require('./package.json').version")
+          apk="Ringloft_${version}_android.apk"
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk "$apk"
+          echo "file=$apk" >> "$GITHUB_OUTPUT"
+
+      # Всегда — артефактом сборки: ручной запуск без тега тоже должен
+      # отдавать APK на проверку.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ steps.apk.outputs.file }}
+
+      - name: Add to the draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "${{ steps.apk.outputs.file }}" --clobber

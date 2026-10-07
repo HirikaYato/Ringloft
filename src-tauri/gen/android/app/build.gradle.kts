@@ -13,6 +13,22 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Подпись релиза. Ключ в репозитории не лежит: его путь и пароли читаются из
+// keystore.properties рядом с этим проектом (файл в .gitignore; в CI его
+// собирает release.yml из секретов). Нет файла — релиз собирается
+// неподписанным, и это не ошибка: так проверяют сборку без ключа.
+//   storeFile=/путь/к/ringloft-release.jks
+//   storePassword=…
+//   keyAlias=ringloft
+//   keyPassword=…        (можно не указывать: тогда тот же, что у хранилища)
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
 android {
     compileSdk = 36
     namespace = "io.github.hirikayato.ringloft"
@@ -23,6 +39,17 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                    ?: keystoreProperties.getProperty("storePassword")
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +64,9 @@ android {
             }
         }
         getByName("release") {
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
