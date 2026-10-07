@@ -525,9 +525,7 @@ impl Engine {
         }
         self.ensure_output(Some(spec.sample_rate))?;
 
-        if let Some(producer) = self.producer.as_mut() {
-            producer.flush();
-        }
+        self.flush_ring();
         self.ended = false;
 
         let info = track_info(track, &source);
@@ -674,9 +672,7 @@ impl Engine {
 
         // Сначала глушим то, что уже лежит в кольце, иначе после прыжка
         // услышим ещё секунду старого места.
-        if let Some(producer) = self.producer.as_mut() {
-            producer.flush();
-        }
+        self.flush_ring();
 
         match self.pipeline.seek(target) {
             Ok(actual) => {
@@ -697,9 +693,7 @@ impl Engine {
     fn stop(&mut self) {
         self.set_playing(false);
         self.unprime();
-        if let Some(producer) = self.producer.as_mut() {
-            producer.flush();
-        }
+        self.flush_ring();
         self.pipeline.clear();
         self.frames_written = 0;
         self.markers.clear();
@@ -960,6 +954,23 @@ impl Engine {
         self.state.set_status(PlaybackStatus::Stopped);
         self.emit(EngineEvent::StatusChanged(PlaybackStatus::Stopped));
         self.report(err);
+    }
+
+    /// Сбрасывает кольцо. Сброс подтверждает аудиоколлбэк, поэтому поток
+    /// устройства должен крутиться: на телефоне он мог быть остановлен из-за
+    /// тишины (`sync_stream`), и тогда сброс ждал бы подтверждения впустую —
+    /// перемотка и загрузка трека на паузе запинались на 200 мс.
+    fn flush_ring(&mut self) {
+        #[cfg(target_os = "android")]
+        {
+            self.silent_since = None;
+            if let Some(output) = self.output.as_ref() {
+                output.set_running(true);
+            }
+        }
+        if let Some(producer) = self.producer.as_mut() {
+            producer.flush();
+        }
     }
 
     /// На телефоне молчащий поток устройства останавливаем по-настоящему:

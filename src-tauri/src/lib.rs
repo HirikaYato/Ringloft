@@ -258,6 +258,8 @@ pub fn run() {
             commands::device::permissions_request,
             #[cfg(mobile)]
             commands::device::system_bars,
+            #[cfg(mobile)]
+            commands::device::app_to_background,
             commands::device::storage_roots,
             commands::device::storage_list,
             #[cfg(desktop)]
@@ -272,6 +274,7 @@ pub fn run() {
             commands::library::library_recent_albums,
             commands::library::covers_for_tracks,
             commands::playlist::playlist_play_files,
+            commands::playlist::playlist_play_item,
             commands::playlist::playlist_move_tab,
             commands::identify::identify_track,
             commands::library::covers_fetch_album,

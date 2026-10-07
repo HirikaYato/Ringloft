@@ -219,6 +219,14 @@ pub fn playlist_play_index(state: State<'_, AppState>, index: u32) -> Result<()>
     state.controls().play_index(index as usize)
 }
 
+/// Играет строку по её номеру, в какой бы вкладке она ни лежала. Нужно
+/// очереди «дальше по порядку»: она показывает играющую вкладку, а та может
+/// быть не той, что открыта, — индекс в открытой указал бы на чужой трек.
+#[tauri::command]
+pub fn playlist_play_item(state: State<'_, AppState>, id: u64) -> Result<()> {
+    state.controls().play_item(id)
+}
+
 /// Играет набор файлов временной очередью, начиная с `start`-го: альбом
 /// или выборка из библиотеки. Открытый плейлист не меняется.
 #[tauri::command]

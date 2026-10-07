@@ -1,57 +1,54 @@
 /**
- * Системная кнопка «назад» на телефоне. Вебвью отдаёт её истории страницы
- * (`handleBackNavigation` в MainActivity), поэтому каждый открытый слой —
- * экран «сейчас играет», лист, страница внутри библиотеки — кладёт в историю
- * запись, а «назад» закрывает верхний. Когда слоёв нет, история пуста, и
- * кнопка делает обычное: сворачивает приложение.
+ * Системная кнопка «назад» на телефоне. Каждый открытый слой — экран
+ * «сейчас играет», лист, окно, страница внутри библиотеки, режим поиска —
+ * встаёт в стопку, и «назад» закрывает верхний. Когда закрывать нечего,
+ * приложение сворачивается.
  *
- * Закрывать слой надо **только** через функцию, которую вернул `pushBack`:
- * она уходит тем же путём, что и кнопка, и история не расходится с экраном.
+ * О нажатии сообщает Activity (событие `app:back`). Истории вебвью для этого
+ * не хватает: записи, созданные без жеста пользователя, Chrome при «назад»
+ * пропускает — слой, открытый программно, так не закрылся бы.
  */
+import { api } from './api';
+import { on } from './events';
+
 interface Layer {
-  depth: number;
   close: () => void;
+  /** Слой сейчас на экране. У раздела, с которого ушли, слои остаются — но «назад» не про них. */
+  shown: () => boolean;
 }
 
 const layers: Layer[] = [];
-let depth = 0;
-let listening = false;
 
-function listen(): void {
-  if (listening) return;
-  listening = true;
-  window.addEventListener('popstate', (event) => {
-    // В записи истории лежит глубина, на которую вернулись: закрываем всё,
-    // что выше. Обычно это один слой.
-    const target = (event.state as { depth?: number } | null)?.depth ?? 0;
-    while (layers.length > 0 && (layers.at(-1)?.depth ?? 0) > target) {
-      layers.pop()?.close();
-    }
-    depth = target;
-  });
-}
-
-/** Открывает слой. Возвращает функцию, которой его закрывают. */
-export function pushBack(close: () => void): () => void {
-  listen();
-  depth += 1;
-  const layer = { depth, close };
-  layers.push(layer);
-  history.pushState({ depth }, '');
+/**
+ * Открывает слой. Возвращает функцию, которой его закрывают. `shown` нужен
+ * слоям внутри раздела: раздел могут спрятать, не закрывая в нём ничего.
+ */
+export function pushBack(close: () => void, shown: () => boolean = () => true): () => void {
+  layers.push({ close, shown });
   return () => {
-    if (layers.at(-1) === layer) history.back();
-    else forget(layer);
+    if (forgetBack(close)) close();
   };
 }
 
-/**
- * Слой исчез сам (компонент убрали с экрана), минуя «назад». Запись в
- * истории остаётся лишней — одно нажатие «назад» потом уйдёт впустую, зато
- * ничего чужого не закроется.
- */
-function forget(layer: Layer): void {
-  const index = layers.indexOf(layer);
-  if (index < 0) return;
+/** Слой закрылся сам, без «назад»: вынимаем его из стопки, ничего не вызывая. */
+export function forgetBack(close: () => void): boolean {
+  const index = layers.findIndex((layer) => layer.close === close);
+  if (index < 0) return false;
   layers.splice(index, 1);
-  layer.close();
+  return true;
+}
+
+/** Подписка на кнопку — один раз, из корневого макета телефона. */
+export async function listenBack(): Promise<void> {
+  await on('app:back', () => {
+    // Верхний из тех, что на экране.
+    let index = layers.length - 1;
+    while (index >= 0 && !layers[index]?.shown()) index -= 1;
+    if (index < 0) {
+      void api.appToBackground();
+      return;
+    }
+    const [layer] = layers.splice(index, 1);
+    layer?.close();
+  });
 }

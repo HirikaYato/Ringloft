@@ -36,6 +36,14 @@ pub fn request_permission(kind: PermissionKind) {
     });
 }
 
+/// Сворачивает приложение, не закрывая окно.
+pub fn move_to_back() {
+    with_native("moveToBack", |env, native| {
+        env.call_static_method(native, "moveToBack", "()V", &[])?;
+        Ok(())
+    });
+}
+
 /// Значки системных панелей: тёмные на светлой теме плеера, светлые на
 /// тёмной. Окно идёт под панели, и система сама его тему не знает.
 pub fn set_light_bars(light: bool) {

@@ -48,6 +48,9 @@ object Native {
   /** Система создала Activity: если Rust-часть уже работает без окна, оно создаётся заново. */
   @JvmStatic external fun activityCreated()
 
+  /** Системная кнопка «назад»: что закрывать, решает интерфейс. */
+  @JvmStatic external fun backPressed()
+
   /** Нажатие в системном плеере. `value` нужен только перемотке — это позиция в миллисекундах. */
   @JvmStatic external fun mediaAction(action: Int, value: Long)
 
@@ -84,6 +87,12 @@ object Native {
   }
 
   @JvmStatic fun storageRoots(): Array<String> = Permissions.storageRoots(appContext)
+
+  /** Сворачивает приложение: «назад» с корневого экрана. Activity при этом остаётся жить. */
+  @JvmStatic
+  fun moveToBack() {
+    main.post { Permissions.current?.moveTaskToBack(true) }
+  }
 
   /** Цвет значков системных панелей под тему плеера; без окна красить нечего. */
   @JvmStatic

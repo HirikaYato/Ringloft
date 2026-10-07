@@ -2,15 +2,11 @@ package io.github.hirikayato.ringloft
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
 
 class MainActivity : TauriActivity() {
-  // Системную кнопку «назад» отдаём вебвью: интерфейс кладёт в его историю
-  // запись на каждый открытый экран или лист (src/lib/back.ts), и «назад»
-  // закрывает верхний. Когда история пуста, срабатывает обычное «назад».
-  override val handleBackNavigation: Boolean = true
-
   /** Тёмные значки строки состояния — для светлой темы плеера, светлые — для тёмной. */
   fun setLightBars(light: Boolean) {
     val bars = WindowCompat.getInsetsController(window, window.decorView)
@@ -24,6 +20,14 @@ class MainActivity : TauriActivity() {
     Permissions.attach(this)
     super.onCreate(savedInstanceState)
     Native.activityCreated()
+    // Системная кнопка «назад» уходит интерфейсу: он закрывает верхний слой
+    // (лист, «сейчас играет», страницу библиотеки), а с корня сам просит
+    // свернуть приложение (src/lib/back.ts). Добавлено после super.onCreate,
+    // поэтому срабатывает раньше обработчиков Tauri: те смотрят в историю
+    // вебвью, а она про слои интерфейса ничего не знает.
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() = Native.backPressed()
+    })
   }
 
   override fun onDestroy() {

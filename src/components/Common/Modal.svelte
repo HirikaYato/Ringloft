@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { onDestroy, type Snippet } from 'svelte';
+
+  import { pushBack } from '../../lib/back';
+  import { device } from '../../stores/device.svelte.ts';
 
   /**
    * Модальное окно: настройки и эквалайзер — это отдельный разговор, а не
@@ -16,15 +19,35 @@
   let dialog: HTMLDivElement | null = $state(null);
 
   $effect(() => dialog?.focus());
+
+  // На телефоне окно закрывает и системная кнопка «назад»: оно встаёт в
+  // стопку слоёв (см. `lib/back.ts`).
+  let gone = false;
+  const dismiss = device.mobile
+    ? pushBack(() => {
+        if (!gone) onclose();
+      })
+    : null;
+
+  function close() {
+    if (dismiss) dismiss();
+    else onclose();
+  }
+
+  // Окно убрал родитель (нажали «Добавить»): из стопки его надо вынуть.
+  onDestroy(() => {
+    gone = true;
+    dismiss?.();
+  });
 </script>
 
 <svelte:window
   onkeydown={(event) => {
-    if (event.key === 'Escape') onclose();
+    if (event.key === 'Escape') close();
   }}
 />
 
-<div class="scrim" role="presentation" onpointerdown={onclose}></div>
+<div class="scrim" role="presentation" onpointerdown={close}></div>
 
 <div
   class="dialog"
@@ -37,7 +60,7 @@
 >
   <header>
     <h1>{title}</h1>
-    <button class="close" title="Закрыть (Esc)" onclick={onclose}>
+    <button class="close" title="Закрыть (Esc)" onclick={close}>
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" /></svg>
     </button>
   </header>

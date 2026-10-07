@@ -171,6 +171,8 @@ export const api = {
   permissionsStatus: () => call<Permissions>('permissions_status'),
   /** Только телефон: на десктопе такой команды нет. Ответ пользователя не возвращается. */
   permissionsRequest: (kind: PermissionKind) => call<null>('permissions_request', { kind }),
+  /** Только телефон: свернуть приложение. */
+  appToBackground: () => call<null>('app_to_background'),
   /** Только телефон: цвет значков строки состояния под тему плеера. */
   systemBars: (light: boolean) => call<null>('system_bars', { light }),
   storageRoots: () => call<FolderEntry[]>('storage_roots'),
@@ -249,6 +251,8 @@ export const api = {
   playlistActivateTab: (id: number) => call<null>('playlist_activate_tab', { id }),
 
   playlistEnqueue: (ids: number[]) => call<null>('playlist_enqueue', { ids }),
+  /** Играет строку по номеру — из любой вкладки, а не только из открытой. */
+  playlistPlayItem: (id: number) => call<null>('playlist_play_item', { id }),
   /** Играет набор файлов временной очередью с `start`-го; открытый список не меняется. */
   playlistPlayFiles: (paths: string[], start: number) =>
     call<boolean>('playlist_play_files', { paths, start }),

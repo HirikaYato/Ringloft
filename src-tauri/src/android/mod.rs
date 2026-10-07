@@ -12,11 +12,12 @@ use std::sync::{Once, OnceLock};
 
 use jni::objects::{GlobalRef, JClass, JObject};
 use jni::{JNIEnv, JavaVM};
-use tauri::{AppHandle, Manager, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 
 pub use media::spawn as spawn_media;
 pub use system::{
-    files_allowed, notifications_allowed, request_permission, set_light_bars, storage_roots,
+    files_allowed, move_to_back, notifications_allowed, request_permission, set_light_bars,
+    storage_roots,
 };
 
 /// Главное окно — то же, что в `tauri.conf.json`.
@@ -63,6 +64,26 @@ pub extern "system" fn Java_io_github_hirikayato_ringloft_Native_activityCreated
         tracing::error!(%err, "не удалось запустить пересоздание окна");
     }
 }
+
+/// `Native.backPressed` из Kotlin: нажали системную кнопку «назад».
+///
+/// Решает интерфейс: у него стопка открытых слоёв, и «назад» закрывает
+/// верхний. История вебвью для этого не годится — записи, созданные без
+/// жеста пользователя, Chrome при «назад» пропускает.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_hirikayato_ringloft_Native_backPressed<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) {
+    if let Some(app) = APP.get()
+        && let Err(err) = app.emit(EVENT_BACK, ())
+    {
+        tracing::warn!(%err, "кнопка «назад» не дошла до интерфейса");
+    }
+}
+
+/// Событие для фронта: нажата системная кнопка «назад».
+const EVENT_BACK: &str = "app:back";
 
 fn reopen_window(app: &AppHandle) {
     // Activity пересоздали, а окно живо (смена настроек экрана) — не наш случай.

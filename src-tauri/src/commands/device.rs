@@ -63,6 +63,14 @@ pub fn permissions_request(kind: PermissionKind) {
     let _ = kind;
 }
 
+/// Сворачивает приложение: так кончается «назад» на корневом экране.
+#[cfg(mobile)]
+#[tauri::command]
+pub fn app_to_background() {
+    #[cfg(target_os = "android")]
+    crate::android::move_to_back();
+}
+
 /// Красит значки строки состояния под тему плеера (см. `set_light_bars`).
 #[cfg(mobile)]
 #[tauri::command]

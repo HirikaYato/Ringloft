@@ -8,8 +8,10 @@
    * половины экрана палец дотягивается, до верхнего угла — нет.
    *
    * Закрывается касанием мимо, кнопкой «назад» и своим содержимым — ему
-   * отдаётся функция `close`. Она уходит через историю (см. `lib/back.ts`),
-   * поэтому `onclose` зовётся ровно один раз, каким бы путём лист ни закрыли.
+   * отдаётся функция `close`. `onclose` зовётся ровно один раз, каким бы
+   * путём лист ни закрыли. Пункт, который открывает следующий слой (другой
+   * лист, окно ввода), передаёт это действие в `close(then)`: сначала уходит
+   * этот лист, потом открывается следующий.
    */
   const {
     title = '',
@@ -18,22 +20,28 @@
   }: {
     title?: string;
     onclose: () => void;
-    children: Snippet<[() => void]>;
+    children: Snippet<[(then?: () => void) => void]>;
   } = $props();
 
-  let closed = false;
-  const close = pushBack(() => {
-    closed = true;
-    onclose();
+  let gone = false;
+  const dismiss = pushBack(() => {
+    if (!gone) onclose();
   });
 
-  // Лист убрали с экрана, минуя «назад» (закрылся экран под ним).
+  function close(then?: () => void) {
+    dismiss();
+    then?.();
+  }
+
+  // Лист убрали с экрана, минуя «назад» (закрылся экран под ним): из стопки
+  // слоёв его надо вынуть, а закрывать уже нечего.
   onDestroy(() => {
-    if (!closed) close();
+    gone = true;
+    dismiss();
   });
 </script>
 
-<div class="scrim" role="presentation" onclick={close}></div>
+<div class="scrim" role="presentation" onclick={() => close()}></div>
 
 <div class="sheet" role="dialog" aria-modal="true" aria-label={title || 'Действия'}>
   <div class="grip" aria-hidden="true"></div>

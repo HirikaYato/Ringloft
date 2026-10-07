@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type FolderEntry, type FolderListing } from '../../lib/api';
+  import { pushBack } from '../../lib/back';
   import { picker } from '../../stores/picker.svelte.ts';
 
   /**
@@ -19,13 +20,29 @@
   let failure = $state<string | null>(null);
   let loading = $state(false);
 
+  /** Что ответить просившему; пусто — отмена. */
+  let answer: string[] = [];
+  let dismiss: (() => void) | null = null;
+
   $effect(() => {
     if (!request) return;
     listing = null;
     chosen = [];
     failure = null;
+    answer = [];
+    // Окно — слой для кнопки «назад»: она его отменяет. Свои кнопки уходят
+    // тем же путём — так просивший получает ответ ровно один раз.
+    dismiss = pushBack(() => {
+      dismiss = null;
+      picker.finish(answer);
+    });
     void start();
   });
+
+  function finish(paths: string[]) {
+    answer = paths;
+    dismiss?.();
+  }
 
   async function start() {
     try {
@@ -63,7 +80,7 @@
 
   function toggle(path: string) {
     if (!request?.multiple) {
-      picker.finish([path]);
+      finish([path]);
       return;
     }
     chosen = chosen.includes(path) ? chosen.filter((item) => item !== path) : [...chosen, path];
@@ -71,9 +88,9 @@
 
   function confirm() {
     if (request?.mode === 'folder') {
-      if (listing) picker.finish([listing.path]);
+      if (listing) finish([listing.path]);
     } else {
-      picker.finish(chosen);
+      finish(chosen);
     }
   }
 
@@ -144,7 +161,7 @@
     </div>
 
     <footer>
-      <button class="ghost" onclick={() => picker.finish([])}>Отмена</button>
+      <button class="ghost" onclick={() => finish([])}>Отмена</button>
       {#if request.mode === 'folder'}
         <button class="primary" disabled={!listing} onclick={confirm}>Выбрать эту папку</button>
       {:else if request.multiple}
