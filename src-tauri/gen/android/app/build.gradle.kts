@@ -13,21 +13,34 @@ val tauriProperties = Properties().apply {
     }
 }
 
-// Подпись релиза. Ключ в репозитории не лежит: его путь и пароли читаются из
-// keystore.properties рядом с этим проектом (файл в .gitignore; в CI его
-// собирает release.yml из секретов). Нет файла — релиз собирается
-// неподписанным, и это не ошибка: так проверяют сборку без ключа.
+// Подпись релиза. Ключ в репозитории не лежит. Где он и с какими паролями,
+// берётся из переменных окружения RINGLOFT_KEYSTORE, RINGLOFT_KEYSTORE_PASSWORD,
+// RINGLOFT_KEY_ALIAS, RINGLOFT_KEY_PASSWORD (так их передаёт release.yml), а
+// без них — из keystore.properties рядом с этим проектом (файл в .gitignore):
 //   storeFile=/путь/к/ringloft-release.jks
 //   storePassword=…
 //   keyAlias=ringloft
 //   keyPassword=…        (можно не указывать: тогда тот же, что у хранилища)
+// Ни того, ни другого — релиз собирается неподписанным, и это не ошибка: так
+// проверяют сборку без ключа.
+//
+// Пароли в CI идут окружением, а не файлом: Properties понимает в файле
+// обратную косую черту как экранирование, и пароль с `\` доезжал бы до
+// keytool искажённым; в самом файле `\` удваивают. Читается он как UTF-8:
+// по умолчанию Properties читает Latin-1, и путь к ключу с кириллицей
+// ломался бы.
 val keystoreProperties = Properties().apply {
     val propFile = rootProject.file("keystore.properties")
     if (propFile.exists()) {
-        propFile.inputStream().use { load(it) }
+        propFile.reader(Charsets.UTF_8).use { load(it) }
     }
 }
-val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
+fun signing(env: String, key: String): String? =
+    System.getenv(env)?.takeIf { it.isNotEmpty() } ?: keystoreProperties.getProperty(key)
+
+val releaseStore = signing("RINGLOFT_KEYSTORE", "storeFile")
+val hasReleaseKey = releaseStore != null
 
 android {
     compileSdk = 36
@@ -43,11 +56,10 @@ android {
     signingConfigs {
         if (hasReleaseKey) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-                    ?: keystoreProperties.getProperty("storePassword")
+                storeFile = file(releaseStore!!)
+                storePassword = signing("RINGLOFT_KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signing("RINGLOFT_KEY_ALIAS", "keyAlias")
+                keyPassword = signing("RINGLOFT_KEY_PASSWORD", "keyPassword") ?: storePassword
             }
         }
     }

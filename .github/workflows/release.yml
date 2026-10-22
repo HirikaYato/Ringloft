@@ -12,7 +12,32 @@ permissions:
   contents: write
 
 jobs:
+  # Ключ подписи проверяется первым и за минуту: раньше неверный пароль
+  # всплывал только в задаче android, после двадцати минут сборки.
+  signing:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Missing signing secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          # Пароль — из окружения (`:env`): в командной строке его видно в
+          # списке процессов.
+          if ! "${JAVA_HOME:+$JAVA_HOME/bin/}keytool" -list -keystore "$RUNNER_TEMP/release.jks" -storepass:env STORE_PASSWORD -alias "$KEY_ALIAS" > /dev/null; then
+            echo "::error::ANDROID_KEYSTORE_PASSWORD does not open the ANDROID_KEYSTORE_BASE64 keystore (or it has no ANDROID_KEY_ALIAS key)"
+            exit 1
+          fi
+          rm "$RUNNER_TEMP/release.jks"
+
   build:
+    needs: signing
     strategy:
       fail-fast: false
       matrix:
@@ -122,30 +147,24 @@ jobs:
 
       - run: npm ci
 
-      # Ключ живёт в секретах, в репозитории его нет. Без него сборка
-      # останавливается: неподписанный APK телефон не поставит, а подписанный
-      # другим ключом не обновит уже установленное приложение.
+      # Ключ живёт в секретах, в репозитории его нет (проверен задачей
+      # signing). Без него сборка не идёт: неподписанный APK телефон не
+      # поставит, а подписанный другим ключом не обновит уже установленное
+      # приложение.
       - name: Signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Нет секретов подписи: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS"
-            exit 1
-          fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
-          {
-            echo "storeFile=$RUNNER_TEMP/release.jks"
-            echo "storePassword=$STORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            # Пустой пароль ключа значит «тот же, что у хранилища».
-            if [ -n "$KEY_PASSWORD" ]; then echo "keyPassword=$KEY_PASSWORD"; fi
-          } > src-tauri/gen/android/keystore.properties
+        run: echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
 
+      # Пароли — окружением, а не файлом keystore.properties: в файле Gradle
+      # читает `\` как экранирование (см. app/build.gradle.kts). Пустой
+      # пароль ключа значит «тот же, что у хранилища».
       - name: Release APK
+        env:
+          RINGLOFT_KEYSTORE: ${{ runner.temp }}/release.jks
+          RINGLOFT_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RINGLOFT_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RINGLOFT_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: npm run android -- build --apk --target aarch64 --target armv7
 
       - name: Name the APK
