@@ -63,7 +63,7 @@ jobs:
             found && /^## / {exit}
             found {print}
           ' CHANGELOG.md)
-          [ -z "$notes" ] && notes="Изменения — в CHANGELOG.md."
+          [ -z "$notes" ] && notes="See CHANGELOG.md."
           {
             echo "body<<NOTES_EOF"
             echo "$notes"

@@ -1,68 +1,69 @@
-# Изменения
+# Changelog
 
-Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии —
-[семантические](https://semver.org/lang/ru/). Раздел версии становится
-описанием релиза на GitHub.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+versions follow [Semantic Versioning](https://semver.org/). Each version's
+section becomes the description of its GitHub release.
 
 ## [0.2.0] — 2026-10-22
 
-Версия для телефона.
+The phone version.
 
 ### Android
-- Ringloft для Android 8.0 и новее: APK для 64- и 32-битных ARM-телефонов
-  в релизах на GitHub. Музыка читается прямо из папок телефона — для этого
-  плеер просит «Доступ ко всем файлам».
-- Музыка играет в фоне и при погашенном экране: карточка в шторке и на
-  экране блокировки, кнопки гарнитуры и Bluetooth, пауза на звонок и при
-  выдернутых наушниках.
-- Свой интерфейс для телефона: плейлисты, библиотека с альбомами и
-  исполнителями, плеер во весь экран с текстом песни, очередью, таймером
-  сна и эквалайзером. Треки листаются свайпом по обложке, плеер
-  закрывается жестом вниз.
-- Плейлисты и библиотека — те же, что на компьютере: папки, умные списки,
-  итоги прослушивания, Last.fm, интернет-радио.
-- Пока нет правки тегов, переименования файлов, визуализатора, пакетных
-  задач (громкость, тексты, обложки), экспорта списка и Discord.
+- Ringloft for Android 8.0 and newer: one APK for 64-bit and 32-bit ARM
+  phones, published on the GitHub releases page. Music is played straight
+  from the phone's folders, which is why the app asks for *All files access*.
+- Plays in the background and with the screen off: a player card in the
+  notification shade and on the lock screen, headset and Bluetooth buttons,
+  pauses for calls and when headphones are unplugged.
+- An interface made for the phone: playlists, a library with albums and
+  artists, and a full-screen player with lyrics, the play queue, a sleep
+  timer and the equalizer. Swipe the cover to change tracks, swipe down to
+  close the player.
+- The same playlists and library features as on the desktop: folders, smart
+  lists, listening stats, Last.fm, internet radio.
+- Not on the phone yet: tag editing, file renaming, the visualizer, batch
+  jobs (loudness, lyrics, covers), playlist export and Discord.
 
-### Исправлено
-- Если заново включить уже играющий трек, переход к следующему выходил с
-  паузой.
-- Короткий сбой на стороне звукового устройства останавливал звук до
-  следующего трека при статусе «играет».
-- Недоступная папка библиотеки (отключённый диск) больше не вычищает свои
-  треки вместе со счётчиками и оценками, а пустая папка-источник — строки
-  плейлиста.
+### Fixed
+- Replaying the track that was already playing broke the gapless
+  transition to the next one.
+- A brief glitch on the audio device side silenced playback until the next
+  track while the status still said "playing".
+- An unreachable library folder (an unplugged drive) no longer wipes its
+  tracks together with play counts and ratings, and an empty playlist source
+  folder no longer empties the playlist.
 
 ## [0.1.0] — 2026-10-02
 
-Первый выпуск.
+First release.
 
-### Звук
-- FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Opus, WAV, AIFF, MKA; CUE-образы;
-  интернет-радио с названиями из эфира.
-- Gapless и кроссфейд, ReplayGain из тегов и свой подсчёт громкости
-  (EBU R128) с записью меток в файлы.
-- Десятиполосный эквалайзер и профили наушников AutoEQ.
-- Частота файла без пересчёта (через PipeWire — после разрешения в
-  настройках).
-- Таймер сна и «остановить после этого трека» с плавным затуханием.
+### Audio
+- FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Opus, WAV, AIFF, MKA; CUE images;
+  internet radio with titles from the stream.
+- Gapless playback and crossfade, ReplayGain from tags and built-in loudness
+  analysis (EBU R128) that writes the tags into the files.
+- A 10-band equalizer and AutoEQ headphone profiles.
+- Playback at the file's sample rate without resampling (via PipeWire, once
+  allowed in the settings).
+- A sleep timer and "stop after this track" with a smooth fade-out.
 
-### Плейлисты и библиотека
-- Вкладки или колонка плейлистов с перестановкой перетаскиванием,
-  очередь, режим повтора и перемешивания у каждого списка.
-- Плейлисты помнят свои папки и обновляются по ним.
-- Библиотека: альбомы, исполнители, жанры, папки, умные списки, поиск,
-  итоги прослушивания, поиск дубликатов и пропавших файлов.
-- Настраиваемые колонки плейлиста.
+### Playlists and library
+- Playlists as tabs or a sidebar, reordered by dragging; a play queue;
+  repeat and shuffle remembered per playlist.
+- Playlists remember their folders and update from them.
+- Library: albums, artists, genres, folders, smart lists, search, listening
+  stats, duplicate and missing file detection.
+- Configurable playlist columns.
 
-### Теги, тексты, обложки
-- Правка тегов, переименование по шаблону, удаление в корзину.
-- Теги по звуку (AcoustID и MusicBrainz), обложки из iTunes и Cover Art
-  Archive с записью в файлы.
-- Синхронный текст песни из `.lrc`, тегов и lrclib.net.
+### Tags, lyrics, covers
+- Tag editing, renaming by template, deleting to the trash.
+- Tags by audio fingerprint (AcoustID and MusicBrainz), covers from iTunes
+  and the Cover Art Archive, written into the files.
+- Synced lyrics from `.lrc` files, tags and lrclib.net.
 
-### Система
-- MPRIS (Linux), системные медиаконтролы (Windows), медиаклавиши, трей,
-  уведомления, управление из командной строки.
+### System
+- MPRIS (Linux), system media controls (Windows), media keys, tray icon,
+  notifications, command-line control.
 - Last.fm, Discord Rich Presence.
-- Темы, свой акцент и акцент из обложки, выбор шрифта и его размера.
+- Themes, a custom accent color or one taken from the cover, font and font
+  size choice.
