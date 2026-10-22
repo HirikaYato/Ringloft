@@ -94,6 +94,12 @@ object Native {
     main.post { Permissions.current?.moveTaskToBack(true) }
   }
 
+  /** Открыть клавиатуру для поля в фокусе (см. MainActivity.showKeyboard). */
+  @JvmStatic
+  fun showKeyboard() {
+    main.post { Permissions.current?.showKeyboard() }
+  }
+
   /** Цвет значков системных панелей под тему плеера; без окна красить нечего. */
   @JvmStatic
   fun setLightBars(light: Boolean) {

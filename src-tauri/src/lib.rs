@@ -260,6 +260,8 @@ pub fn run() {
             commands::device::system_bars,
             #[cfg(mobile)]
             commands::device::app_to_background,
+            #[cfg(mobile)]
+            commands::device::keyboard_show,
             commands::device::storage_roots,
             commands::device::storage_list,
             #[cfg(desktop)]

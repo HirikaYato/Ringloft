@@ -17,8 +17,10 @@
   import { useAppearance } from './lib/appearance.svelte.ts';
   import { listenBack } from './lib/back';
   import { initStores } from './lib/boot';
+  import { keyboard, watchKeyboard } from './lib/keyboard.svelte.ts';
   import { device } from './stores/device.svelte.ts';
   import { player } from './stores/player.svelte.ts';
+  import { playlist } from './stores/playlist.svelte.ts';
   import { resolvedTheme, settings } from './stores/settings.svelte.ts';
 
   /**
@@ -30,8 +32,11 @@
   let bootError = $state<ErrorPayload | null>(null);
   let tab = $state<Tab>('playlist');
   let nowOpen = $state(false);
+  /** Просьба плейлисту встать на играющую строку (растёт с каждой просьбой). */
+  let reveal = $state(0);
 
   useAppearance();
+  watchKeyboard();
 
   onMount(async () => {
     try {
@@ -57,6 +62,14 @@
     });
   });
 
+  /** Из плеера во весь экран — к играющему треку в его списке. */
+  async function revealPlaying() {
+    tab = 'playlist';
+    const source = playlist.tabs.find((item) => item.isPlaying);
+    if (source) await playlist.activateTab(source.id);
+    reveal += 1;
+  }
+
   const error = $derived(bootError ?? player.error ?? settings.error);
 </script>
 
@@ -64,7 +77,7 @@
   <main>
     <!-- Разделы прячем, а не убираем: у каждого своя прокрутка и открытая
          страница, и возвращаться надо туда, откуда ушли. -->
-    <section hidden={tab !== 'playlist'}><PlaylistScreen shown={tab === 'playlist'} /></section>
+    <section hidden={tab !== 'playlist'}><PlaylistScreen shown={tab === 'playlist'} {reveal} /></section>
     <section hidden={tab !== 'library'}><LibraryScreen shown={tab === 'library'} /></section>
     <section hidden={tab !== 'settings'}><SettingsScreen {info} /></section>
   </main>
@@ -80,12 +93,16 @@
     />
   {/if}
 
-  <MiniPlayer onopen={() => (nowOpen = true)} />
-  <TabBar bind:tab />
+  <!-- Пока открыта клавиатура, нижние панели прячутся: иначе от экрана над
+       ней оставалась бы половина, и та — под панелями. -->
+  {#if keyboard.inset === 0}
+    <MiniPlayer onopen={() => (nowOpen = true)} />
+    <TabBar bind:tab />
+  {/if}
 </div>
 
 {#if nowOpen}
-  <NowPlaying onclose={() => (nowOpen = false)} />
+  <NowPlaying onclose={() => (nowOpen = false)} onreveal={() => void revealPlaying()} />
 {/if}
 
 <CloseTabDialog />
@@ -96,7 +113,10 @@
 
 <style>
   .app {
-    height: 100dvh;
+    /* Отступ сверху входит в высоту: иначе с клавиатурой низ на эти 40 px
+       уезжал под неё (без клавиатуры его прятало сжатие flex). */
+    box-sizing: border-box;
+    height: calc(100dvh - var(--keyboard, 0px));
     display: flex;
     flex-direction: column;
     /* Окно идёт под системные панели — отступаем от строки состояния сами;
@@ -115,5 +135,9 @@
   }
   section[hidden] {
     display: none;
+  }
+  /* Сообщения встают над мини-плеером и панелью разделов, а не на них. */
+  :global(:root) {
+    --notice-bottom: calc(env(safe-area-inset-bottom) + 132px);
   }
 </style>

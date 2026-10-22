@@ -1,13 +1,17 @@
 <script lang="ts">
+  import { flushSync } from 'svelte';
+  import { fly } from 'svelte/transition';
+
   import { api, type AlbumRow, type LibraryTrack, type NamedCount, type SmartList } from '../../lib/api';
   import { pushBack } from '../../lib/back';
-  import { plural } from '../../lib/format';
-  import { pickFolders } from '../../lib/pick';
+  import { hideKeyboardOnEnter } from '../../lib/keyboard.svelte.ts';
   import { builtinSmartLists, library } from '../../stores/library.svelte.ts';
   import { settings } from '../../stores/settings.svelte.ts';
   import AlbumGrid from '../Library/AlbumGrid.svelte';
   import ListeningStats from '../Library/ListeningStats.svelte';
+  import AlbumHead from './AlbumHead.svelte';
   import Icon, { type IconName } from './Icon.svelte';
+  import LibraryHome from './LibraryHome.svelte';
   import LibraryNames from './LibraryNames.svelte';
   import LibraryTracks from './LibraryTracks.svelte';
 
@@ -22,7 +26,7 @@
     | { kind: 'albums'; title: string; albums: AlbumRow[] }
     | { kind: 'names'; title: string; scope: 'artist' | 'genre' | 'folder'; items: NamedCount[] }
     | { kind: 'smart'; title: string }
-    | { kind: 'tracks'; title: string; tracks: LibraryTrack[]; album: boolean }
+    | { kind: 'tracks'; title: string; tracks: LibraryTrack[]; album?: AlbumRow }
     | { kind: 'search'; title: string }
     | { kind: 'stats'; title: string };
 
@@ -30,8 +34,14 @@
   const { shown }: { shown: boolean } = $props();
 
   let pages = $state<{ page: Page; back: () => void }[]>([]);
-  const top = $derived(pages.at(-1));
-  let list = $state<ReturnType<typeof LibraryTracks> | null>(null);
+  let searchInput = $state<HTMLInputElement | null>(null);
+
+  /** Фокус — в самом обработчике касания, иначе клавиатура не откроется (см. плейлист). */
+  function openSearch() {
+    open({ kind: 'search', title: 'Поиск' });
+    flushSync();
+    searchInput?.focus();
+  }
 
   function open(page: Page) {
     const back = pushBack(
@@ -75,7 +85,8 @@
 
   async function openAlbum(album: AlbumRow) {
     const tracks = await api.libraryTracks('album', album.key);
-    open({ kind: 'tracks', title: album.title || 'Без названия', tracks, album: true });
+    // Название крупно стоит в шапке альбома — в полосе сверху оно было бы повтором.
+    open({ kind: 'tracks', title: 'Альбом', tracks, album });
   }
 
   async function openName(scope: 'artist' | 'genre' | 'folder', item: NamedCount) {
@@ -85,68 +96,35 @@
       return;
     }
     const title = scope === 'folder' ? (item.name.split('/').filter(Boolean).at(-1) ?? item.name) : item.name;
-    open({ kind: 'tracks', title, tracks: await api.libraryTracks(scope, item.name), album: false });
+    open({ kind: 'tracks', title, tracks: await api.libraryTracks(scope, item.name) });
   }
 
   async function openSmart(smart: SmartList) {
     const tracks = await api.librarySmartTracks(smart.rules);
-    open({ kind: 'tracks', title: smart.name, tracks, album: false });
+    open({ kind: 'tracks', title: smart.name, tracks });
+  }
+
+  /** Выборка играет временной очередью — собранные списки не трогаем. */
+  function play(paths: string[]) {
+    if (paths.length > 0) void api.playlistPlayFiles(paths, 0);
   }
 
   async function playAlbum(album: AlbumRow) {
     const tracks = await api.libraryTracks('album', album.key);
-    await api.playlistPlayFiles(
-      tracks.map((track) => track.path),
-      0,
-    );
+    play(tracks.map((track) => track.path));
   }
 
   const smartLists = $derived([...builtinSmartLists(), ...(settings.current?.smartLists ?? [])]);
-
-  // Недавние альбомы перечитываем после каждого скана: он мог принести новые.
-  let recent = $state<AlbumRow[]>([]);
-  $effect(() => {
-    void library.lastScan;
-    void library.stats?.tracks;
-    void api
-      .libraryRecentAlbums(12)
-      .then((albums) => (recent = albums))
-      .catch((err) => console.warn('[ringloft] недавние альбомы не пришли', err));
-  });
-
-  $effect(() => {
-    for (const album of recent) void library.requestCover(album.key);
-  });
-
-  async function addFolder() {
-    const picked = await pickFolders({ title: 'Папка библиотеки' });
-    if (picked.length > 0) await library.addFolders(picked);
-  }
-
-  const stats = $derived(library.stats);
-  const summary = $derived(
-    stats && stats.tracks > 0
-      ? `${stats.tracks} ${plural(stats.tracks, 'трек', 'трека', 'треков')} · ${hours(stats.totalDurationMs)}`
-      : '',
-  );
-
-  /** Длительность всей библиотеки: счёт идёт на часы, секунды тут шум. */
-  function hours(ms: number): string {
-    const total = Math.round(ms / 3_600_000);
-    return total > 0 ? `${total} ${plural(total, 'час', 'часа', 'часов')} музыки` : 'меньше часа музыки';
-  }
-  const SCAN_PHASES: Record<string, string> = {
-    walking: 'обход папок',
-    reading: 'чтение тегов',
-    cleaning: 'очистка',
-  };
 </script>
 
+<!-- Страницы лежат стопкой и живут, пока открыты: вернулись назад — та же
+     прокрутка, что была. Видна только верхняя, новая въезжает справа, а
+     закрытая уезжает туда же и открывает ту, что под ней. -->
 <div class="screen">
-  {#if !top}
+  <div class="view" hidden={pages.length > 0}>
     <header>
       <h1>Библиотека</h1>
-      <button class="key" aria-label="Поиск" onclick={() => open({ kind: 'search', title: 'Поиск' })}>
+      <button class="key" aria-label="Поиск" onclick={openSearch}>
         <Icon name="search" />
       </button>
       <button class="key" aria-label="Пересканировать" disabled={library.scanning} onclick={() => library.scan()}>
@@ -154,63 +132,31 @@
       </button>
     </header>
 
-    <div class="home">
-      {#if library.scanning}
-        <p class="status">
-          Сканирую{library.progress ? `: ${SCAN_PHASES[library.progress.phase] ?? ''}` : ''}…
-        </p>
-      {/if}
+    <LibraryHome
+      sections={SECTIONS}
+      onsection={(id) => SECTIONS.find((section) => section.id === id)?.open()}
+      onalbum={openAlbum}
+    />
+  </div>
 
-      {#if library.folders.length === 0}
-        <div class="empty">
-          <p>Покажите плееру, где лежит музыка: он прочитает теги и разложит её по альбомам, исполнителям и жанрам.</p>
-          <button class="primary" onclick={addFolder}>Добавить папку</button>
-        </div>
-      {:else}
-        <div class="tiles">
-          {#each SECTIONS as section (section.id)}
-            <button class="tile" onclick={() => section.open()}>
-              <Icon name={section.icon} />
-              <span>{section.label}</span>
-            </button>
-          {/each}
-        </div>
-
-        {#if recent.length > 0}
-          <h2>Недавно добавленные</h2>
-          <div class="strip">
-            {#each recent as album (album.key)}
-              <button class="recent" onclick={() => openAlbum(album)}>
-                <span class="art">
-                  {#if library.covers.get(album.key)}
-                    <img src={library.covers.get(album.key)} alt="" loading="lazy" />
-                  {:else}
-                    <Icon name="note" size={28} />
-                  {/if}
-                </span>
-                <span class="name">{album.title || 'Без названия'}</span>
-                <span class="sub">{album.artist ?? '—'}</span>
-              </button>
-            {/each}
-          </div>
+  {#each pages as entry, depth (entry)}
+    {@const page = entry.page}
+    <div
+      class="view page"
+      hidden={depth !== pages.length - 1}
+      in:fly={{ x: 48, duration: 220, opacity: 0 }}
+      out:fly={{ x: 48, duration: 180, opacity: 0 }}
+    >
+      <header>
+        <button class="key" aria-label="Назад" onclick={entry.back}><Icon name="back" /></button>
+        <h1>{page.title}</h1>
+        {#if page.kind === 'tracks' && !page.album && page.tracks.length > 0}
+          <button class="key accent" aria-label="Играть всё" onclick={() => play(page.tracks.map((track) => track.path))}>
+            <Icon name="play" />
+          </button>
         {/if}
+      </header>
 
-        {#if summary}<p class="status">{summary}</p>{/if}
-      {/if}
-    </div>
-  {:else}
-    {@const page = top.page}
-    <header>
-      <button class="key" aria-label="Назад" onclick={top.back}><Icon name="back" /></button>
-      <h1>{page.title}</h1>
-      {#if page.kind === 'tracks' && page.tracks.length > 0}
-        <button class="key accent" aria-label="Играть всё" onclick={() => list?.play(0)}>
-          <Icon name="play" />
-        </button>
-      {/if}
-    </header>
-
-    <div class="page">
       {#if page.kind === 'albums'}
         <AlbumGrid albums={page.albums} onopen={openAlbum} onplay={playAlbum} />
       {:else if page.kind === 'names'}
@@ -221,7 +167,8 @@
           onopen={(item) => openName(page.scope, item)}
         />
       {:else if page.kind === 'tracks'}
-        <LibraryTracks bind:this={list} tracks={page.tracks} showArtist={!page.album} />
+        {#if page.album}<AlbumHead album={page.album} tracks={page.tracks} onplay={play} />{/if}
+        <LibraryTracks tracks={page.tracks} showArtist={!page.album} />
       {:else if page.kind === 'smart'}
         <div class="scroll">
           {#each smartLists as smart (smart.id)}
@@ -233,14 +180,14 @@
           {/each}
         </div>
       {:else if page.kind === 'search'}
-        <!-- svelte-ignore a11y_autofocus -->
         <input
+          bind:this={searchInput}
           class="input search"
           type="search"
           placeholder="Название, исполнитель, альбом"
-          autofocus
           value={library.query}
           oninput={(event) => library.search(event.currentTarget.value)}
+          onkeydown={hideKeyboardOnEnter}
         />
         <LibraryTracks
           tracks={library.results}
@@ -248,18 +195,28 @@
         />
       {:else}
         <div class="scroll">
-          <ListeningStats onplay={(path) => void api.playlistPlayFiles([path], 0)} />
+          <ListeningStats onplay={(path) => play([path])} />
         </div>
       {/if}
     </div>
-  {/if}
+  {/each}
 </div>
 
 <style>
   .screen {
+    position: relative;
     height: 100%;
+    overflow: hidden;
+  }
+  .view {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
+    background: var(--bg);
+  }
+  .view[hidden] {
+    display: none;
   }
   header {
     flex: none;
@@ -301,127 +258,16 @@
   .key.accent {
     color: var(--accent);
   }
-  .home,
   .scroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .home {
-    padding: 16px;
-  }
-  .page {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
   /* Сетка альбомов с десктопа прокручивается сама — ей нужна вся высота. */
-  .page :global(.grid) {
+  .page > :global(.grid) {
     flex: 1;
     min-height: 0;
-  }
-  .tiles {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-  .tile {
-    min-height: 60px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 0 14px;
-    font: inherit;
-    text-align: left;
-    color: var(--fg);
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-  .tile:active {
-    background: var(--row-hover);
-  }
-  .tile :global(svg) {
-    color: var(--accent);
-  }
-  h2 {
-    margin: 24px 0 10px;
-    font-size: var(--fs-md);
-    font-weight: 600;
-    color: var(--fg-dim);
-  }
-  /* Лента едет вбок и упирается в края экрана, а не в отступы страницы. */
-  .strip {
-    display: flex;
-    gap: 12px;
-    margin: 0 -16px;
-    padding: 0 16px 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .recent {
-    flex: none;
-    width: 124px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0;
-    font: inherit;
-    text-align: left;
-    color: var(--fg);
-    background: none;
-    border: none;
-  }
-  .art {
-    width: 124px;
-    height: 124px;
-    display: grid;
-    place-items: center;
-    margin-bottom: 4px;
-    overflow: hidden;
-    border-radius: var(--radius);
-    color: var(--fg-faint);
-    background: var(--bg-inset);
-  }
-  .art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .name,
-  .sub {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .name {
-    font-size: var(--fs-sm);
-    font-weight: 600;
-  }
-  .sub {
-    font-size: var(--fs-xs);
-    color: var(--fg-faint);
-  }
-  .status {
-    margin: 20px 0 0;
-    font-size: var(--fs-sm);
-    color: var(--fg-faint);
-  }
-  .empty {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 32px 8px;
-    color: var(--fg-dim);
-    line-height: 1.5;
-  }
-  .empty p {
-    margin: 0;
-  }
-  .empty .primary {
-    min-height: 48px;
   }
   .line {
     width: 100%;

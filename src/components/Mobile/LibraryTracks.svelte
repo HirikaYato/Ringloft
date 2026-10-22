@@ -1,18 +1,23 @@
 <script lang="ts">
   import { api, type LibraryTrack } from '../../lib/api';
+  import { player } from '../../stores/player.svelte.ts';
   import VirtualList from '../Common/VirtualList.svelte';
+  import AddToList from './AddToList.svelte';
   import TrackRow from './TrackRow.svelte';
 
   /**
    * Треки альбома, жанра, папки, умного списка или поиска. Касание играет
    * всю выборку временной очередью, начиная с выбранного трека: собранные
-   * руками плейлисты библиотека не трогает.
+   * руками плейлисты библиотека не трогает. Положить трек в такой список —
+   * долгим нажатием.
    */
   const {
     tracks,
     empty = 'Здесь пусто.',
     showArtist = true,
   }: { tracks: LibraryTrack[]; empty?: string; showArtist?: boolean } = $props();
+
+  let adding = $state<LibraryTrack | null>(null);
 
   export function play(start = 0) {
     if (tracks.length === 0) return;
@@ -35,10 +40,20 @@
           ? [track.artist, track.album].filter(Boolean).join(' — ')
           : (track.artist ?? '')}
         durationMs={track.durationMs}
+        current={track.path === player.track?.path}
         onpress={() => play(index)}
+        onhold={() => (adding = track)}
       />
     {/snippet}
   </VirtualList>
+{/if}
+
+{#if adding}
+  <AddToList
+    paths={[adding.path]}
+    title="«{adding.title}» — в список"
+    onclose={() => (adding = null)}
+  />
 {/if}
 
 <style>

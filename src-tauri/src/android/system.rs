@@ -44,6 +44,15 @@ pub fn move_to_back() {
     });
 }
 
+/// Клавиатура для поля, которому фокус дали не касанием: вебвью на такой
+/// фокус её не открывает.
+pub fn show_keyboard() {
+    with_native("showKeyboard", |env, native| {
+        env.call_static_method(native, "showKeyboard", "()V", &[])?;
+        Ok(())
+    });
+}
+
 /// Значки системных панелей: тёмные на светлой теме плеера, светлые на
 /// тёмной. Окно идёт под панели, и система сама его тему не знает.
 pub fn set_light_bars(light: bool) {

@@ -3,17 +3,17 @@
 
   import { api } from '../../lib/api';
   import { pushBack } from '../../lib/back';
-  import { formatTime } from '../../lib/format';
+  import { flung, swipe } from '../../lib/swipe';
   import { player } from '../../stores/player.svelte.ts';
   import { playlist } from '../../stores/playlist.svelte.ts';
   import { settings } from '../../stores/settings.svelte.ts';
   import { sleep } from '../../stores/sleep.svelte.ts';
-  import Equalizer from '../Player/Equalizer.svelte';
-  import HeadphoneEq from '../Player/HeadphoneEq.svelte';
   import Lyrics from '../Player/Lyrics.svelte';
+  import CoverDeck from './CoverDeck.svelte';
   import Icon from './Icon.svelte';
-  import Sheet from './Sheet.svelte';
-  import SheetItem from './SheetItem.svelte';
+  import PlayerSheets, { sleepLabel, type PlayerSheet } from './PlayerSheets.svelte';
+  import SeekBar from './SeekBar.svelte';
+  import Transport from './Transport.svelte';
   import TrackRow from './TrackRow.svelte';
 
   /**
@@ -23,36 +23,42 @@
    *
    * Громкости здесь нет намеренно: на телефоне её крутят кнопками корпуса.
    */
-  const { onclose }: { onclose: () => void } = $props();
+  const { onclose, onreveal }: { onclose: () => void; onreveal: () => void } = $props();
 
+  const LEAVE_MS = 220;
+
+  let height = $state(0);
+  /** Насколько плеер стянули вниз пальцем. */
+  let pull = $state(0);
+  let pullMs = $state(0);
   let gone = false;
-  const close = pushBack(() => {
-    if (!gone) onclose();
-  });
+  let leaving = false;
+
+  /** Уезжает вниз и только потом исчезает — и от кнопки, и от «назад». */
+  function leave() {
+    if (leaving || gone) return;
+    leaving = true;
+    pullMs = LEAVE_MS;
+    pull = height;
+    setTimeout(() => {
+      if (!gone) onclose();
+    }, LEAVE_MS);
+  }
+
+  const close = pushBack(leave);
   onDestroy(() => {
     gone = true;
     close();
   });
 
   let view = $state<'cover' | 'lyrics' | 'queue'>('cover');
-  let sheet = $state<'none' | 'sleep' | 'eq'>('none');
+  let sheet = $state<PlayerSheet>('none');
 
-  const playing = $derived(player.status === 'playing');
   const repeat = $derived(settings.current?.playback.repeat ?? 'off');
   const shuffle = $derived(settings.current?.playback.shuffle ?? false);
   const artist = $derived(player.tags?.artist ?? '');
   const album = $derived(player.tags?.album ?? '');
-  const seekable = $derived(player.durationMs > 0);
-
-  /** Пока ползунок тащат, показываем его место, а не позицию трека. */
-  let dragging = $state<number | null>(null);
-  const shown = $derived(dragging ?? player.positionMs);
-
-  function seek() {
-    if (dragging === null) return;
-    void player.seek(dragging);
-    dragging = null;
-  }
+  const source = $derived(playlist.tabs.find((tab) => tab.isPlaying));
 
   // Порядок вперёд зависит от трека, перемешивания и повтора.
   $effect(() => {
@@ -63,47 +69,56 @@
     void playlist.loadUpcoming();
   });
 
-  const SLEEP_MINUTES = [15, 30, 45, 60, 90];
-  const sleepLabel = $derived(
-    sleep.kind === 'timer'
-      ? `Пауза через ${formatTime(sleep.remainingMs)}`
-      : sleep.kind === 'afterTrack'
-        ? 'Остановится после этого трека'
-        : 'Таймер сна',
-  );
-
-  /** Смахнули вниз — закрыли. Жест ловим на шапке и обложке, а не на тексте. */
-  let swipeFrom: { x: number; y: number } | null = null;
-  function swipeEnd(event: PointerEvent) {
-    const from = swipeFrom;
-    swipeFrom = null;
-    if (!from) return;
-    const dy = event.clientY - from.y;
-    if (dy > 90 && dy > Math.abs(event.clientX - from.x) * 1.5) close();
+  /** Показать играющий трек в его списке: плеер уезжает, список встаёт на строку. */
+  function reveal() {
+    close();
+    onreveal();
   }
 </script>
 
-<div class="now" role="dialog" aria-modal="true" aria-label="Сейчас играет">
+<div
+  class="now"
+  class:tinted={player.coverTint !== null}
+  class:pulled={pull > 0}
+  role="dialog"
+  aria-modal="true"
+  aria-label="Сейчас играет"
+  bind:clientHeight={height}
+  style:--tint={player.coverTint ?? 'transparent'}
+  style:transform="translateY({pull}px)"
+  style:transition="transform {pullMs}ms var(--ease)"
+>
+  <!-- Вниз тянут за шапку и обложку; текст и очередь прокручиваются сами. -->
   <div
-    class="swipe"
-    role="presentation"
-    onpointerdown={(event) => (swipeFrom = { x: event.clientX, y: event.clientY })}
-    onpointerup={swipeEnd}
-    onpointercancel={() => (swipeFrom = null)}
+    class="grip"
+    class:full={view === 'cover'}
+    {@attach swipe({
+      axes: () => ({ y: !leaving }),
+      move: (_axis, delta) => {
+        pullMs = 0;
+        pull = Math.max(0, delta);
+      },
+      end: (_axis, delta, velocity) => {
+        if (delta > 0 && flung(delta, velocity, height, 0.25)) {
+          close();
+        } else {
+          pullMs = LEAVE_MS;
+          pull = 0;
+        }
+      },
+    })}
   >
     <header>
       <button class="key" aria-label="Свернуть" onclick={close}><Icon name="down" /></button>
+      {#if source}
+        <button class="source" onclick={reveal}>
+          <span class="label">{source.isTemporary ? 'Играет' : 'Играет из списка'}</span>
+          <span class="name">{source.name}</span>
+        </button>
+      {/if}
     </header>
 
-    {#if view === 'cover'}
-      <div class="art">
-        {#if player.coverUrl}
-          <img src={player.coverUrl} alt="" />
-        {:else}
-          <Icon name={player.isStream ? 'radio' : 'note'} size={72} />
-        {/if}
-      </div>
-    {/if}
+    {#if view === 'cover'}<CoverDeck />{/if}
   </div>
 
   {#if view === 'lyrics'}
@@ -129,37 +144,9 @@
     {#if artist || album}<p>{[artist, album].filter(Boolean).join(' — ')}</p>{/if}
   </div>
 
-  <div class="seek">
-    <input
-      type="range"
-      aria-label="Позиция"
-      min="0"
-      max={Math.max(1, player.durationMs)}
-      value={shown}
-      disabled={!seekable}
-      oninput={(event) => (dragging = event.currentTarget.valueAsNumber)}
-      onchange={seek}
-    />
-    <div class="times">
-      <span>{formatTime(shown)}</span>
-      <span>{seekable ? formatTime(player.durationMs) : 'эфир'}</span>
-    </div>
-  </div>
+  <SeekBar />
 
-  <div class="transport">
-    <button class="key" class:on={shuffle} aria-label="Перемешивание" aria-pressed={shuffle} onclick={() => settings.setShuffle(!shuffle)}>
-      <Icon name="shuffle" />
-    </button>
-    <button class="key" aria-label="Предыдущий" onclick={() => player.prev()}><Icon name="prev" size={30} /></button>
-    <button class="key play" aria-label={playing ? 'Пауза' : 'Играть'} onclick={() => player.toggle()}>
-      <Icon name={playing ? 'pause' : 'play'} size={30} />
-    </button>
-    <button class="key" aria-label="Следующий" onclick={() => player.next()}><Icon name="next" size={30} /></button>
-    <button class="key repeat" class:on={repeat !== 'off'} aria-label="Повтор" onclick={() => void settings.cycleRepeat()}>
-      <Icon name="repeat" />
-      {#if repeat === 'track'}<span class="one">1</span>{/if}
-    </button>
-  </div>
+  <Transport />
 
   <div class="extras">
     <button class="key" class:on={view === 'lyrics'} aria-label="Текст песни" aria-pressed={view === 'lyrics'} onclick={() => (view = view === 'lyrics' ? 'cover' : 'lyrics')}>
@@ -168,7 +155,7 @@
     <button class="key" class:on={view === 'queue'} aria-label="Дальше по порядку" aria-pressed={view === 'queue'} onclick={() => (view = view === 'queue' ? 'cover' : 'queue')}>
       <Icon name="queue" />
     </button>
-    <button class="key" class:on={sleep.kind !== 'off'} aria-label={sleepLabel} onclick={() => (sheet = 'sleep')}>
+    <button class="key" class:on={sleep.kind !== 'off'} aria-label={sleepLabel()} onclick={() => (sheet = 'sleep')}>
       <Icon name="moon" />
     </button>
     <button class="key" class:on={settings.current?.audio.eqEnabled} aria-label="Эквалайзер" onclick={() => (sheet = 'eq')}>
@@ -177,52 +164,7 @@
   </div>
 </div>
 
-{#if sheet === 'sleep'}
-  <Sheet title={sleepLabel} onclose={() => (sheet = 'none')}>
-    {#snippet children(dismiss)}
-      {#each SLEEP_MINUTES as minutes (minutes)}
-        <SheetItem
-          label={minutes < 60 ? `Через ${minutes} минут` : minutes === 60 ? 'Через час' : 'Через полтора часа'}
-          onclick={() => {
-            void sleep.set({ kind: 'minutes', minutes });
-            dismiss();
-          }}
-        />
-      {/each}
-      <!-- У радио конца нет — останавливаться не по чему. -->
-      <SheetItem
-        label="После этого трека"
-        active={sleep.kind === 'afterTrack'}
-        disabled={player.isStream}
-        onclick={() => {
-          void sleep.set({ kind: 'afterTrack' });
-          dismiss();
-        }}
-      />
-      {#if sleep.kind !== 'off'}
-        <SheetItem
-          icon="close"
-          label="Выключить таймер"
-          onclick={() => {
-            void sleep.set({ kind: 'off' });
-            dismiss();
-          }}
-        />
-      {/if}
-    {/snippet}
-  </Sheet>
-{/if}
-
-{#if sheet === 'eq'}
-  <Sheet title="Эквалайзер" onclose={() => (sheet = 'none')}>
-    {#snippet children()}
-      <div class="eq">
-        <Equalizer />
-        <HeadphoneEq />
-      </div>
-    {/snippet}
-  </Sheet>
-{/if}
+<PlayerSheets bind:sheet />
 
 <style>
   .now {
@@ -233,6 +175,9 @@
     flex-direction: column;
     padding: env(safe-area-inset-top) 20px calc(env(safe-area-inset-bottom) + 12px);
     background: var(--bg);
+    box-shadow: 0 -8px 32px rgb(0 0 0 / 0.3);
+    /* Пятно цвета обложки (ниже) лежит под содержимым, но над фоном. */
+    isolation: isolate;
     animation: rise var(--dur-mid) var(--ease);
   }
   @keyframes rise {
@@ -241,37 +186,74 @@
       opacity: 0;
     }
   }
-  .swipe {
+  /* Пятно цвета обложки сверху: экран перестаёт быть одинаковым для любого
+     трека. Цвет меняется плавно — фон перекрашивается, а не мигает. */
+  .now::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 35% 0;
+    z-index: -1;
+    background: var(--tint);
+    opacity: 0;
+    mask-image: linear-gradient(to bottom, black, transparent);
+    transition:
+      background-color 600ms var(--ease),
+      opacity 600ms var(--ease);
+    pointer-events: none;
+  }
+  .now.tinted::before {
+    opacity: 0.45;
+  }
+  /* Стянутый вниз плеер — лист поверх приложения, у листа скруглён верх. */
+  .now.pulled {
+    border-radius: 18px 18px 0 0;
+    overflow: hidden;
+  }
+  .grip {
     display: flex;
     flex-direction: column;
     /* Вертикальный жест здесь наш — иначе вебвью примет его за прокрутку. */
     touch-action: none;
   }
-  .swipe:has(.art) {
+  .grip.full {
     flex: 1;
     min-height: 0;
   }
   header {
-    display: flex;
+    display: grid;
+    grid-template-columns: 52px 1fr 52px;
+    align-items: center;
     margin: 4px -12px 0;
   }
-  .art {
-    flex: 1;
-    min-height: 0;
-    display: grid;
-    place-items: center;
-    margin: 8px 0 16px;
-    color: var(--fg-faint);
-    /* Обложка — квадрат во всю ширину, но не выше отведённого места:
-       считаем от размеров самого блока, а не от картинки. */
-    container-type: size;
+  .source {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 8px;
+    font: inherit;
+    color: var(--fg);
+    background: none;
+    border: none;
+    border-radius: var(--radius-lg);
   }
-  .art img {
-    width: min(100cqw, 100cqh);
-    height: min(100cqw, 100cqh);
-    object-fit: cover;
-    border-radius: 14px;
-    box-shadow: var(--shadow-pop);
+  .source:active {
+    background: var(--row-hover);
+  }
+  .label {
+    font-size: var(--fs-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .name {
+    max-width: 100%;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .pane {
     flex: 1;
@@ -318,33 +300,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .seek input {
-    width: 100%;
-    height: 32px;
-    margin: 4px 0 0;
-  }
-  .times {
-    display: flex;
-    justify-content: space-between;
-    font-size: var(--fs-sm);
-    font-variant-numeric: tabular-nums;
-    color: var(--fg-faint);
-  }
-  .transport,
   .extras {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-  }
-  .transport {
-    padding: 8px 0 4px;
-  }
-  .extras {
     justify-content: space-around;
     padding-top: 4px;
   }
   .key {
-    position: relative;
     width: 52px;
     height: 52px;
     display: grid;
@@ -354,30 +316,10 @@
     border: none;
     border-radius: 50%;
   }
-  .transport .key {
-    color: var(--fg);
-  }
   .key:active {
     background: var(--row-hover);
   }
   .key.on {
     color: var(--accent);
-  }
-  .key.play {
-    width: 68px;
-    height: 68px;
-    color: var(--accent-fg);
-    background: var(--accent);
-  }
-  .one {
-    position: absolute;
-    right: 9px;
-    bottom: 9px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .eq {
-    padding: 0 16px 16px;
   }
 </style>

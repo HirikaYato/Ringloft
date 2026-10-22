@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatTime } from '../../lib/format';
+  import { player } from '../../stores/player.svelte.ts';
   import Cover from './Cover.svelte';
 
   /**
@@ -82,7 +83,16 @@
   onclick={click}
   oncontextmenu={(event) => event.preventDefault()}
 >
-  <Cover {path} />
+  <span class="art">
+    <Cover {path} />
+    <!-- Играющая строка видна и без цвета названия: полоски на обложке, на
+         паузе они замирают. -->
+    {#if current}
+      <span class="bars" class:paused={player.status !== 'playing'} aria-hidden="true">
+        <i></i><i></i><i></i>
+      </span>
+    {/if}
+  </span>
   <span class="text">
     <span class="title">{title}</span>
     {#if subtitle}<span class="subtitle">{subtitle}</span>{/if}
@@ -112,6 +122,49 @@
   }
   .row.selected {
     background: var(--accent-soft);
+  }
+  .art {
+    position: relative;
+    flex: none;
+    display: grid;
+  }
+  .bars {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 3px;
+    padding-bottom: 12px;
+    border-radius: 6px;
+    background: rgb(0 0 0 / 0.45);
+  }
+  .bars i {
+    width: 4px;
+    height: 18px;
+    border-radius: 1px;
+    background: var(--accent);
+    transform-origin: bottom;
+    animation: bounce 900ms ease-in-out infinite alternate;
+  }
+  .bars i:nth-child(2) {
+    animation-delay: -300ms;
+    animation-duration: 700ms;
+  }
+  .bars i:nth-child(3) {
+    animation-delay: -600ms;
+    animation-duration: 1100ms;
+  }
+  .bars.paused i {
+    animation-play-state: paused;
+  }
+  @keyframes bounce {
+    from {
+      transform: scaleY(0.25);
+    }
+    to {
+      transform: scaleY(1);
+    }
   }
   .text {
     flex: 1;

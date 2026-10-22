@@ -2,6 +2,7 @@ package io.github.hirikayato.ringloft
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
@@ -13,6 +14,16 @@ class MainActivity : TauriActivity() {
     bars.isAppearanceLightStatusBars = light
     bars.isAppearanceLightNavigationBars = light
   }
+  /**
+   * Клавиатура для поля, которому фокус дали не касанием (поиск, диалог
+   * ввода): вебвью на такой фокус её не открывает. Сфокусирован при этом
+   * сам вебвью — его и просим.
+   */
+  fun showKeyboard() {
+    val view = currentFocus ?: return
+    getSystemService(InputMethodManager::class.java)?.showSoftInput(view, 0)
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     // До super.onCreate: он запускает Rust-часть, а движку звука контекст нужен сразу.

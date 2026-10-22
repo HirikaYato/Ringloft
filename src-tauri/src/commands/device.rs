@@ -71,6 +71,14 @@ pub fn app_to_background() {
     crate::android::move_to_back();
 }
 
+/// Открывает экранную клавиатуру для поля в фокусе (см. `show_keyboard`).
+#[cfg(mobile)]
+#[tauri::command]
+pub fn keyboard_show() {
+    #[cfg(target_os = "android")]
+    crate::android::show_keyboard();
+}
+
 /// Красит значки строки состояния под тему плеера (см. `set_light_bars`).
 #[cfg(mobile)]
 #[tauri::command]

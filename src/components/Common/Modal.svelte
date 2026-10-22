@@ -78,11 +78,13 @@
   .dialog {
     position: fixed;
     z-index: 21;
-    top: 50%;
+    /* На телефоне окно встаёт над клавиатурой: `--keyboard` задаёт
+       `lib/keyboard.svelte.ts`, на десктопе её нет. */
+    top: calc(50% - var(--keyboard, 0px) / 2);
     left: 50%;
     transform: translate(-50%, -50%);
     width: min(var(--dialog-width), calc(100vw - 32px));
-    max-height: min(680px, calc(100vh - 64px));
+    max-height: min(680px, calc(100vh - var(--keyboard, 0px) - 64px));
     display: flex;
     flex-direction: column;
     background: var(--bg-elev);

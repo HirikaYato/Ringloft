@@ -173,6 +173,8 @@ export const api = {
   permissionsRequest: (kind: PermissionKind) => call<null>('permissions_request', { kind }),
   /** Только телефон: свернуть приложение. */
   appToBackground: () => call<null>('app_to_background'),
+  /** Только телефон: клавиатура для поля, которому фокус дали не касанием. */
+  keyboardShow: () => call<null>('keyboard_show'),
   /** Только телефон: цвет значков строки состояния под тему плеера. */
   systemBars: (light: boolean) => call<null>('system_bars', { light }),
   storageRoots: () => call<FolderEntry[]>('storage_roots'),

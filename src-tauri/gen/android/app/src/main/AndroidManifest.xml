@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Короткий отклик на долгое нажатие (`navigator.vibrate` в вебвью):
+         без разрешения вызов молча ничего не делает. Спрашивать его не надо. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

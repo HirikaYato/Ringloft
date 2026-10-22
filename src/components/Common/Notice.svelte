@@ -15,7 +15,8 @@
   .notice {
     position: fixed;
     left: 50%;
-    bottom: 96px;
+    /* Телефон поднимает сообщение над своими нижними панелями. */
+    bottom: var(--notice-bottom, 96px);
     z-index: 60;
     max-width: min(560px, calc(100vw - 32px));
     transform: translateX(-50%);

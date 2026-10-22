@@ -17,7 +17,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 pub use media::spawn as spawn_media;
 pub use system::{
     files_allowed, move_to_back, notifications_allowed, request_permission, set_light_bars,
-    storage_roots,
+    show_keyboard, storage_roots,
 };
 
 /// Главное окно — то же, что в `tauri.conf.json`.
